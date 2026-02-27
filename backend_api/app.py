@@ -3,12 +3,12 @@ from flask import Flask, request, jsonify
 app = Flask(__name__)
 
 # A simple route to check if the server is running
-@app.route('/', methods=)
+@app.route('/', methods=['GET'])
 def home():
     return "Maize Yield Prediction API is running!"
 
 # The main endpoint that your Mobile App and USSD system will communicate with
-@app.route('/predict_yield', methods=)
+@app.route('/predict_yield', methods=['POST'])
 def mock_predict():
     # Parse incoming JSON data (e.g., from the mobile app or USSD gateway)
     data = request.get_json() or {}
