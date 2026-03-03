@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, make_response
+
 app = Flask(__name__)
 
 @app.route('/', methods=['GET'])
@@ -14,11 +15,12 @@ def mock_predict():
         "status": "success",
         "variety": variety,
         "predicted_yield_kg_ha": 1450.5,
-        "recommendation": f"Your {variety} crop is entering the V6-V8 leaf stage. Apply Ammonium Nitrate top-dressing now."
+        "recommendation": f"Your {variety} crop is entering the V6-V8 leaf stage. Apply Ammonium Nitrate top-dressing now.",
+        "weather_alert": "Forecast shows no severe dry spells in the next 10 days. Moisture levels are optimal."
     }
     return jsonify(mock_response)
 
-# --- NEW: USSD ENDPOINT ---
+# --- USSD ENDPOINT ---
 @app.route('/ussd', methods=['POST'])
 def ussd_callback():
     # Read the variables sent via POST from the Africa's Talking API
@@ -61,7 +63,7 @@ def ussd_callback():
 
     # Africa's Talking requires the response to be sent as plain text
     res = make_response(response, 200)
-    res.headers["Content-Type"] = "text/plain"  # Fixed: must index into headers, not overwrite it
+    res.headers["Content-Type"] = "text/plain"
     return res
 
 if __name__ == '__main__':
