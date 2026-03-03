@@ -1,0 +1,14 @@
+credentials:
+  usernames:
+    officer_nswazi:
+      email: officer1@agritex.ac.zw
+      name: John Doe (Nswazi Ward)
+      password: '<PASTE_HASHED_PASSWORD_1_HERE>'
+    admin_master:
+      email: admin@agritex.gov.zw
+      name: Chief Extension Officer
+      password: '<PASTE_HASHED_PASSWORD_2_HERE>'
+cookie:
+  expiry_days: 30
+  key: random_signature_key_agritex_2026
+  name: agritex_dashboard_cookie
