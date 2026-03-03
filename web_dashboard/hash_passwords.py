@@ -1,7 +1,7 @@
 import streamlit_authenticator as stauth
 
-# Replace these with the actual passwords you want to give your officers
-passwords_to_hash = ['secureAdmin99', 'secureAdmin98', 'secureAdmin97']
+hashed1 = stauth.Hasher.hash('secureAdmin99')
+hashed2 = stauth.Hasher.hash('secureAdmin98')
 
-hashed_passwords = stauth.Hasher(passwords_to_hash).generate()
-print(hashed_passwords)
+print("Hashed Password 1:", hashed1)
+print("Hashed Password 2:", hashed2)
