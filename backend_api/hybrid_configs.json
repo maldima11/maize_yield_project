@@ -1,0 +1,21 @@
+{
+  "hybrids": {
+    "SC 301": {
+      "maturity_days": 110,
+      "optimal_ph": [5.5, 6.5],
+      "min_moisture_pct": 35.0,
+      "n_requirement_kg_ha": 120
+    },
+    "SC 529": {
+      "maturity_days": 135,
+      "optimal_ph": [5.8, 7.0],
+      "min_moisture_pct": 40.0,
+      "n_requirement_kg_ha": 140
+    }
+  },
+  "districts": {
+    "Umzingwane": { "soil_type": "Sandy Loam", "base_ph_offset": -0.2 },
+    "Mazabuka": { "soil_type": "Clay Loam", "base_ph_offset": 0.1 },
+    "Chirundu": { "soil_type": "Alluvial", "base_ph_offset": 0.0 }
+  }
+}

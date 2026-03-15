@@ -1,67 +1,109 @@
 from flask import Flask, request, jsonify, make_response
+import io
+import csv
 
 app = Flask(__name__)
 
+# --- GENERALIZATION CONFIGURATION ---
+# This dictionary allows the system to work in any district.
+# In a production app, this would eventually move to a Database.
+DISTRICT_THRESHOLDS = {
+    "mazabuka": {"min_moisture": 35, "ideal_ph": (6.0, 7.0), "name": "Mazabuka"},
+    "chirundu": {"min_moisture": 45, "ideal_ph": (5.5, 6.8), "name": "Chirundu"},
+    "guruve": {"min_moisture": 40, "ideal_ph": (6.0, 7.5), "name": "Guruve"}
+}
+
 @app.route('/', methods=['GET'])
 def home():
-    return "Maize Yield Prediction API is running!"
+    return "Maize Yield Prediction API (Phase 7: Interactive) is running!"
 
-# Your previous Mock API endpoint
+# --- NEW: CSV VALIDATION & DECISION ENGINE ---
+@app.route('/analyze_csv', methods=['POST'])
+def analyze_csv():
+    # 1. Get metadata from request
+    district_key = request.form.get('district', 'mazabuka').lower()
+    ward = request.form.get('ward', 'Unknown Ward')
+    
+    if 'file' not in request.files:
+        return jsonify({"status": "error", "message": "No file uploaded"}), 400
+    
+    file = request.files['file']
+    thresholds = DISTRICT_THRESHOLDS.get(district_key, DISTRICT_THRESHOLDS['mazabuka'])
+
+    # 2. Read and Validate CSV
+    try:
+        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
+        reader = csv.DictReader(stream)
+        
+        # Checking for required columns
+        required_columns = ['Soil_Moisture', 'pH_Level']
+        if not all(col in reader.fieldnames for col in required_columns):
+            return jsonify({
+                "status": "error", 
+                "message": f"Invalid CSV format. Required columns: {required_columns}"
+            }), 400
+
+        # 3. Simple Logic for "Decision" (Interactive Feedback)
+        data_summary = []
+        alerts = []
+        for row in reader:
+            moisture = float(row['Soil_Moisture'])
+            ph = float(row['pH_Level'])
+            
+            if moisture < thresholds['min_moisture']:
+                alerts.append(f"Low moisture detected in {ward} ({moisture}%).")
+            
+            data_summary.append({"moisture": moisture, "ph": ph})
+
+        # 4. Final Response for the Dashboard
+        decision = "Optimal" if not alerts else "Action Required"
+        return jsonify({
+            "status": "success",
+            "district": thresholds['name'],
+            "ward": ward,
+            "decision": decision,
+            "alerts": alerts,
+            "summary": data_summary[:5]  # Return first 5 rows for the preview table
+        })
+
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+# --- UPDATED PREDICT ENDPOINT ---
 @app.route('/predict_yield', methods=['POST'])
-def mock_predict():
+def predict():
     data = request.get_json() or {}
     variety = data.get('variety', 'SC 301')
+    district = data.get('district', 'General')
+    
+    # Logic now factors in the district for a more "presentable" result
     mock_response = {
         "status": "success",
         "variety": variety,
+        "district": district,
         "predicted_yield_kg_ha": 1450.5,
-        "recommendation": f"Your {variety} crop is entering the V6-V8 leaf stage. Apply Ammonium Nitrate top-dressing now.",
-        "weather_alert": "Forecast shows no severe dry spells in the next 10 days. Moisture levels are optimal."
+        "recommendation": f"Your {variety} in {district} is at V6 stage. Apply Top-dressing.",
+        "interactive_status": "Green" # For the frontend "Traffic Light"
     }
     return jsonify(mock_response)
 
-# --- USSD ENDPOINT ---
+# --- USSD ENDPOINT (Kept for Inclusive Dissemination) ---
 @app.route('/ussd', methods=['POST'])
 def ussd_callback():
-    # Read the variables sent via POST from the Africa's Talking API
     session_id = request.values.get("sessionId", None)
-    phone_number = request.values.get("phoneNumber", None)
     text = request.values.get("text", "")
 
-    # USSD Logic: 'text' contains the string of inputs separated by '*' (e.g., "1*2")
     if text == "":
-        # This is the first request. "CON" means the session continues.
-        response  = "CON Welcome to the Maize Yield Predictor\n"
-        response += "1. Check SC 301 Forecast\n"
-        response += "2. Check SC 529 Forecast\n"
-        response += "3. Report Crop Stress"
-
+        response  = "CON Welcome to Maize Yield Predictor\n"
+        response += "1. Select District\n"
+        response += "2. Quick Forecast"
     elif text == "1":
-        # The user selected option 1. "END" means the session terminates.
-        response = "END Forecast for SC 301: 1450 kg/ha.\nRecommendation: Apply Ammonium Nitrate top-dressing now."
-
-    elif text == "2":
-        # The user selected option 2.
-        response = "END Forecast for SC 529: 1600 kg/ha.\nRecommendation: Adequate moisture detected. No action needed."
-
-    elif text == "3":
-        # The user selected option 3, opening a sub-menu.
-        response  = "CON Select stress type:\n"
-        response += "1. Drought\n"
-        response += "2. Fall Armyworm"
-
-    elif text == "3*1":
-        # User selected 3, then 1
-        response = "END Drought reported. Recommendation: Apply mulch to retain soil moisture."
-
-    elif text == "3*2":
-        # User selected 3, then 2
-        response = "END Fall Armyworm reported. Recommendation: Crush visible larvae or apply Lambda-cyhalothrin."
-
+        response = "CON Choose District:\n1. Mazabuka\n2. Chirundu"
+    elif text == "1*1":
+        response = "END Mazabuka Selected. Average yield for Hybrid X is 1.4t/ha."
     else:
-        response = "END Invalid input. Please try again."
+        response = "END Service currently updating for Phase 7."
 
-    # Africa's Talking requires the response to be sent as plain text
     res = make_response(response, 200)
     res.headers["Content-Type"] = "text/plain"
     return res
