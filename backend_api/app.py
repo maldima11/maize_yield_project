@@ -1,5 +1,5 @@
 from flask import Flask, request, jsonify, make_response
-from flask_cors import CORS  # Fixes 403 Forbidden errors for Streamlit
+from flask_cors import CORS  # Critical for Streamlit-Flask communication
 import io
 import json
 import os
@@ -8,7 +8,10 @@ from ussd_handler import handle_ussd_request
 from database import init_db, save_report, get_regional_summary
 
 app = Flask(__name__)
-CORS(app)  # Enable Cross-Origin Resource Sharing
+
+# --- THE MAGIC FIX FOR ERROR 403 ---
+# This explicitly allows the Streamlit frontend (even if ports change) to access the API.
+CORS(app, resources={r"/*": {"origins": "*"}}) 
 
 # --- DATABASE INITIALIZATION ---
 init_db()
@@ -21,6 +24,7 @@ def load_configs():
         with open(config_path, 'r') as f:
             return json.load(f)
     except FileNotFoundError:
+        # Fallback thresholds if JSON is missing
         return {
             "hybrids": {"SC 301": {"optimal_ph": [5.5, 6.5], "min_moisture_pct": 35.0}},
             "districts": {"Umzingwane": {"name": "Umzingwane"}}
@@ -30,12 +34,12 @@ CONFIGS = load_configs()
 
 @app.route('/', methods=['GET'])
 def home():
-    return "Maize Yield Prediction API (CORS Enabled & Database Integrated) is running!"
+    return "Maize Yield Prediction API (Phase 7.3: CORS Fully Enabled) is running!"
 
 # --- CSV VALIDATION & DECISION ENGINE ---
 @app.route('/analyze_csv', methods=['POST'])
 def analyze_csv():
-    # 1. Capture Metadata
+    # 1. Capture Metadata from form-data
     district_name = request.form.get('district', 'Umzingwane')
     hybrid_name = request.form.get('variety', 'SC 301')
     ward = request.form.get('ward', 'General Ward')
@@ -47,27 +51,29 @@ def analyze_csv():
 
     file = request.files['file']
     try:
-        stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
-        df = pd.read_csv(stream)
+        # Read the file directly into Pandas
+        df = pd.read_csv(file)
 
         required_columns = ['Soil_Moisture', 'pH_Level']
         if not all(col in df.columns for col in required_columns):
             return jsonify({
-                "status": "error",
+                "status": "error", 
                 "message": f"Missing columns. CSV must have: {required_columns}"
             }), 400
 
         # 2. Decision Logic
         alerts = []
         avg_moisture = df['Soil_Moisture'].mean()
-        min_moisture = hybrid_rules['min_moisture_pct']
+        min_moisture = hybrid_rules.get('min_moisture_pct', 35.0)
+        
         if avg_moisture < min_moisture:
-            alerts.append(f"Low moisture: Avg is {avg_moisture:.1f}% for {hybrid_name}.")
+            alerts.append(f"Low moisture: Avg is {avg_moisture:.1f}% (Min required: {min_moisture}%)")
 
         avg_ph = df['pH_Level'].mean()
-        ph_range = hybrid_rules['optimal_ph']
+        ph_range = hybrid_rules.get('optimal_ph', [5.5, 6.5])
+        
         if avg_ph < ph_range[0] or avg_ph > ph_range[1]:
-            alerts.append(f"pH Imbalance: Avg is {avg_ph:.1f} for {hybrid_name}.")
+            alerts.append(f"pH Imbalance: Avg is {avg_ph:.1f} (Optimal: {ph_range[0]}-{ph_range[1]})")
 
         decision = "Optimal" if not alerts else "Action Required"
 
@@ -109,20 +115,19 @@ def get_trends():
 # --- PREDICT YIELD ENDPOINT ---
 @app.route('/predict_yield', methods=['POST'])
 def predict():
-    # Explicitly handle JSON and return proper response
+    # Explicitly handle JSON sent from Streamlit
     data = request.get_json(silent=True) or {}
     variety = data.get('variety', 'SC 301')
     district = data.get('district', 'General')
     
-    response_data = {
+    return jsonify({
         "status": "success",
         "variety": variety,
         "district": district,
         "predicted_yield_kg_ha": 1450.5,
-        "recommendation": f"Your {variety} in {district} is at V6 stage. Apply Top-dressing.",
-        "interactive_status": "Green"
-    }
-    return jsonify(response_data)
+        "recommendation": f"Your {variety} in {district} is at V6 stage. Apply top-dressing.",
+        "interactive_status": "Optimal"
+    })
 
 # --- USSD ENDPOINT ---
 @app.route('/ussd', methods=['POST'])
@@ -130,7 +135,6 @@ def ussd_callback():
     if not request.values:
         return make_response("Bad Request: No USSD data", 400)
 
-    # Note: ensure handle_ussd_request in ussd_handler.py accepts these arguments
     response_text = handle_ussd_request(
         text=request.values.get("text", ""),
         session_id=request.values.get("sessionId", ""),
@@ -143,6 +147,5 @@ def ussd_callback():
     return res
 
 if __name__ == '__main__':
-    # Safe debug mode check
-    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    # Start server on Port 5000
     app.run(debug=True, port=5000)
