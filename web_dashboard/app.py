@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import yaml
 from yaml.loader import SafeLoader
-import streamlit_authenticator as stauth
+import streamlit_authenticator as stauth  # Requires: streamlit-authenticator==0.2.3
 import os
 
 # 1. Load Authentication Configurations
@@ -25,54 +25,38 @@ authentication_status = st.session_state.get('authentication_status')
 
 if authentication_status == False:
     st.error('Username/password is incorrect')
-elif authentication_status == None:
+elif authentication_status is None:  # FIX #4: use 'is None' instead of '== None'
     st.warning('Please enter your username and password')
 elif authentication_status == True:
-    # --- CONFIGURATION ---
-    # Using local port 5000 as per your Flask setup
     BACKEND_URL = "http://127.0.0.1:5000"
 
-    # --- SECURE DASHBOARD CONTENT ---
     st.sidebar.write(f'Welcome, *{name}*')
     authenticator.logout('Logout', 'sidebar')
 
     st.title("🌾 Umzingwane Maize Yield Dashboard")
     st.markdown("Phase 7: Interactive AI insights for smallholder farmers and extension officers.")
 
-    # --- SIDEBAR: REGIONAL CONTEXT (Generalization) ---
     st.sidebar.header("📍 Regional Context")
-    st.sidebar.info("Select the location to calibrate AI thresholds to local soil and climate profiles.")
-    
-    # Generalizing across districts
     district = st.sidebar.selectbox("Select District", ["Umzingwane", "Mazabuka", "Chirundu", "Guruve"])
-    
-    # Ward selection with help text
-    ward = st.sidebar.selectbox("Select Ward", [f"Ward {i}" for i in range(1, 21)], help="Each ward has unique soil benchmarks.")
+    ward = st.sidebar.selectbox("Select Ward", [f"Ward {i}" for i in range(1, 21)])
     variety = st.sidebar.selectbox("Select Maize Variety", ["SC 301", "SC 529", "Pioneer Hybrid"])
 
     # --- SECTION 1: QUICK AI FORECAST ---
     st.header(f"Live Yield Forecast: {district} - {ward}")
-    
+
     if st.button("Generate Forecast"):
         try:
-            # Pointing to your local Flask predict_yield endpoint
             api_url = f"{BACKEND_URL}/predict_yield"
             payload = {"variety": variety, "district": district, "ward": ward}
-            
             response = requests.post(api_url, json=payload)
-            
+
             if response.status_code == 200:
                 data = response.json()
                 col1, col2, col3 = st.columns(3)
                 col1.metric("Predicted Yield", f"{data['predicted_yield_kg_ha']} kg/ha")
                 col2.metric("Target Hybrid", data['variety'])
-                # Using the new interactive_status from backend
-                status_label = data.get('interactive_status', 'Optimal')
-                col3.metric("System Status", status_label)
-                
+                col3.metric("System Status", data.get('interactive_status', 'Optimal'))
                 st.success(f"**Recommendation:** {data['recommendation']}")
-            else:
-                st.error("Error: Failed to fetch data from the API.")
         except Exception as e:
             st.error(f"Connection Error: {e}")
 
@@ -80,59 +64,112 @@ elif authentication_status == True:
 
     # --- SECTION 2: INTERACTIVE CSV DECISION ENGINE ---
     st.header("📂 Smart Field Data Upload")
-    st.markdown("""
-    **Instructions:** 1. Select your Ward in the sidebar.
-    2. Upload your weekly field readings (.csv).
-    3. The AI will validate your data against regional moisture and pH targets.
-    """)
-
-    uploaded_file = st.file_uploader("Upload Ward Field Log", type=["csv"], help="CSV must contain: Soil_Moisture, pH_Level")
+    uploaded_file = st.file_uploader("Upload Ward Field Log", type=["csv"])
 
     if uploaded_file is not None:
-        # Show instant preview
         df = pd.read_csv(uploaded_file)
         st.subheader("🔍 Data Preview")
         st.dataframe(df.head(3), use_container_width=True)
 
-        # Analysis Button
         if st.button("Analyze & Verify Decision"):
             with st.spinner("Processing CSV against District Benchmarks..."):
-                # Reset file pointer
+                # FIX #2: use .seek(0) then .read() for consistent file reading
                 uploaded_file.seek(0)
-                files = {'file': (uploaded_file.name, uploaded_file.getvalue(), 'text/csv')}
-                form_data = {'district': district, 'ward': ward}
+                files = {'file': (uploaded_file.name, uploaded_file.read(), 'text/csv')}
+                form_data = {'district': district, 'ward': ward, 'variety': variety}
 
                 try:
                     res = requests.post(f"{BACKEND_URL}/analyze_csv", files=files, data=form_data)
                     result = res.json()
 
                     if result["status"] == "success":
-                        # Display Decision Card
+                        # 1. Decision Alert
                         if result["decision"] == "Optimal":
                             st.balloons()
                             st.success(f"### ✅ Result: {result['decision']}")
-                            st.write(f"Current conditions in **{ward}** are ideal for the chosen hybrid.")
                         else:
                             st.error(f"### ⚠️ Result: {result['decision']}")
                             for alert in result["alerts"]:
                                 st.warning(alert)
-                        
-                        # Visualization
+
+                        # 2. Soil Health Gauge
+                        st.subheader("🧪 Soil Health Diagnostic")
+
+                        # FIX #5: safely access summary keys with fallback defaults
+                        avg_ph = result.get("summary", {}).get("avg_ph", 6.5)
+                        avg_moisture = result.get("summary", {}).get("avg_moisture", "N/A")
+
+                        # FIX #1: snap avg_ph to nearest valid slider option to prevent crash
+                        ph_options = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+                        nearest_ph = min(ph_options, key=lambda x: abs(x - avg_ph))
+
+                        st.select_slider(
+                            "Soil pH Level Indicator",
+                            options=ph_options,
+                            value=nearest_ph,
+                            help="Maize generally thrives between 5.5 and 7.0 pH"
+                        )
+
+                        if avg_ph < 5.5:
+                            st.error(f"Low pH Detected ({avg_ph}). Soil is too acidic for {variety}. Consider applying Lime.")
+                        elif avg_ph > 7.0:
+                            st.warning(f"High pH Detected ({avg_ph}). Soil is becoming alkaline. Monitor nutrient uptake.")
+                        else:
+                            st.success(f"Optimal pH ({avg_ph})! The soil environment is perfect for {variety} roots.")
+
+                        # 3. Moisture Visualization
                         if 'Soil_Moisture' in df.columns:
                             st.line_chart(df['Soil_Moisture'], use_container_width=True)
                             st.caption("Soil Moisture Trend (%) during the reported period.")
+
+                        # --- PRINTABLE ADVICE REPORT ---
+                        st.divider()
+                        st.subheader("📄 Dissemination")
+
+                        report_content = f"""
+==========================================
+MAIZE HYBRID ADVISORY REPORT
+==========================================
+Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}
+Officer: {name}
+Location: {district} - {ward}
+------------------------------------------
+CROP DETAILS:
+Variety: {variety}
+Field Status: {result['decision']}
+------------------------------------------
+SCIENTIFIC SUMMARY:
+- Average Soil Moisture: {avg_moisture}%
+- Average Soil pH: {avg_ph}
+------------------------------------------
+AI RECOMMENDATIONS:
+"""
+                        if not result["alerts"]:
+                            report_content += "- Conditions are optimal. Continue standard management.\n"
+                        else:
+                            for alert in result["alerts"]:
+                                report_content += f"- {alert}\n"
+
+                        report_content += """
+------------------------------------------
+Generated by: Umzingwane Maize Yield AI
+==========================================
+"""
+
+                        st.download_button(
+                            label="📥 Download Advice Slip for Farmer",
+                            data=report_content,
+                            file_name=f"Maize_Advice_{ward}_{pd.Timestamp.now().strftime('%d%m%Y')}.txt",
+                            mime="text/plain",
+                            help="Click to generate a text report that can be shared or printed."
+                        )
+                        st.info("💡 Pro-tip: This report can be shared via WhatsApp or SMS to the farmer.")
 
                     else:
                         st.error(f"Validation Error: {result['message']}")
                 except Exception as e:
                     st.error(f"Server Connection Error: {e}")
 
-    # Sidebar Footer: Template Download
     st.sidebar.divider()
     template_data = "Date,Soil_Moisture,pH_Level\n2026-03-15,42.5,6.2"
-    st.sidebar.download_button(
-        label="📥 Download CSV Template",
-        data=template_data,
-        file_name="field_log_template.csv",
-        mime="text/csv"
-    )
+    st.sidebar.download_button("📥 Download CSV Template", data=template_data, file_name="field_log_template.csv")
