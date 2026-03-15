@@ -1,13 +1,13 @@
 from flask import Flask, request, jsonify, make_response
 import io
-import csv
 import json
 import os
 import pandas as pd
+from ussd_handler import handle_ussd_request
 
 app = Flask(__name__)
 
-# --- CONFIGURATION LOADER ---
+# --- FIX #3: Load configs ONCE at startup, not on every request ---
 def load_configs():
     """Load the biological and regional thresholds from JSON."""
     config_path = os.path.join(os.path.dirname(__file__), 'hybrid_configs.json')
@@ -21,60 +21,58 @@ def load_configs():
             "districts": {"Umzingwane": {"name": "Umzingwane"}}
         }
 
+CONFIGS = load_configs()  # FIX #3: Loaded once at startup
+
+
 @app.route('/', methods=['GET'])
 def home():
-    return "Maize Yield Prediction API (Phase 7: Integrated JSON Logic) is running!"
+    return "Maize Yield Prediction API (Phase 7: Integrated USSD & JSON Logic) is running!"
 
-# --- UPDATED: CSV VALIDATION & DECISION ENGINE ---
+
+# --- CSV VALIDATION & DECISION ENGINE ---
 @app.route('/analyze_csv', methods=['POST'])
 def analyze_csv():
-    # 1. Capture Metadata from the Dashboard request
     district_name = request.form.get('district', 'Umzingwane')
     hybrid_name = request.form.get('variety', 'SC 301')
     ward = request.form.get('ward', 'General Ward')
-    
-    # Load the rulebook
-    configs = load_configs()
-    
-    # Get specific rules for the hybrid, default to SC 301 if not found
-    hybrid_rules = configs['hybrids'].get(hybrid_name, configs['hybrids'].get('SC 301'))
-    
+
+    hybrid_rules = CONFIGS['hybrids'].get(hybrid_name, CONFIGS['hybrids'].get('SC 301'))
+
     if 'file' not in request.files:
         return jsonify({"status": "error", "message": "No file uploaded"}), 400
-    
-    file = request.files['file']
 
-    # 2. Read and Validate CSV using Pandas for better handling
+    file = request.files['file']
     try:
         stream = io.StringIO(file.stream.read().decode("UTF8"), newline=None)
         df = pd.read_csv(stream)
-        
-        # Check for required columns
+
         required_columns = ['Soil_Moisture', 'pH_Level']
         if not all(col in df.columns for col in required_columns):
             return jsonify({
-                "status": "error", 
+                "status": "error",
                 "message": f"Missing columns. CSV must have: {required_columns}"
             }), 400
 
-        # 3. Decision Logic: Compare Data vs. JSON Thresholds
         alerts = []
-        
-        # Check Average Moisture
+
         avg_moisture = df['Soil_Moisture'].mean()
         min_moisture = hybrid_rules['min_moisture_pct']
         if avg_moisture < min_moisture:
-            alerts.append(f"Low moisture: Avg is {avg_moisture:.1f}% (Required: >{min_moisture}%) for {hybrid_name}.")
+            alerts.append(
+                f"Low moisture: Avg is {avg_moisture:.1f}% "
+                f"(Required: >{min_moisture}%) for {hybrid_name}."
+            )
 
-        # Check Average pH
         avg_ph = df['pH_Level'].mean()
-        ph_range = hybrid_rules['optimal_ph'] # [min, max]
+        ph_range = hybrid_rules['optimal_ph']
         if avg_ph < ph_range[0] or avg_ph > ph_range[1]:
-            alerts.append(f"pH Imbalance: Avg is {avg_ph:.1f} (Optimal {hybrid_name} range: {ph_range[0]}-{ph_range[1]}).")
+            alerts.append(
+                f"pH Imbalance: Avg is {avg_ph:.1f} "
+                f"(Optimal {hybrid_name} range: {ph_range[0]}-{ph_range[1]})."
+            )
 
-        # 4. Final Decision Assignment
         decision = "Optimal" if not alerts else "Action Required"
-        
+
         return jsonify({
             "status": "success",
             "district": district_name,
@@ -87,17 +85,22 @@ def analyze_csv():
                 "avg_ph": round(avg_ph, 2)
             }
         })
-
     except Exception as e:
         return jsonify({"status": "error", "message": f"Processing error: {str(e)}"}), 500
+
 
 # --- PREDICT YIELD ENDPOINT ---
 @app.route('/predict_yield', methods=['POST'])
 def predict():
-    data = request.get_json() or {}
+    data = request.get_json()
+
+    # FIX #2: Validate that request body is present and is JSON
+    if not data:
+        return jsonify({"status": "error", "message": "Request body must be valid JSON"}), 400
+
     variety = data.get('variety', 'SC 301')
     district = data.get('district', 'General')
-    
+
     mock_response = {
         "status": "success",
         "variety": variety,
@@ -108,23 +111,33 @@ def predict():
     }
     return jsonify(mock_response)
 
+
 # --- USSD ENDPOINT ---
 @app.route('/ussd', methods=['POST'])
 def ussd_callback():
+    # FIX #4: Guard against missing Content-Type or empty form data
+    if not request.values:
+        return make_response("Bad Request: No form data received", 400)
+
+    # FIX #1: Pass all required Africa's Talking USSD parameters to the handler
+    session_id = request.values.get("sessionId", "")
+    phone_number = request.values.get("phoneNumber", "")
+    service_code = request.values.get("serviceCode", "")
     text = request.values.get("text", "")
 
-    if text == "":
-        response  = "CON Welcome to Maize Yield Predictor\n"
-        response += "1. Select District\n"
-        response += "2. Quick Forecast"
-    elif text == "1":
-        response = "CON Choose District:\n1. Umzingwane\n2. Mazabuka"
-    else:
-        response = "END Feature updating for Phase 7."
+    response_text = handle_ussd_request(
+        text=text,
+        session_id=session_id,
+        phone_number=phone_number,
+        service_code=service_code
+    )
 
-    res = make_response(response, 200)
+    res = make_response(response_text, 200)
     res.headers["Content-Type"] = "text/plain"
     return res
 
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    # FIX #5: Use environment variable to control debug mode safely
+    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+    app.run(debug=debug_mode, port=5000)
