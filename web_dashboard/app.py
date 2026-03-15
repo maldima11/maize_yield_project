@@ -15,24 +15,53 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 1. NATURE-MODERN CSS (Forest Green Theme)
+# 1. CSS FOR BRANDING, VISIBILITY & NATURE THEME
 st.markdown("""
     <style>
         /* Main background */
         .stApp { background-color: #F1F3F2; }
         
-        /* Sidebar styling */
+        /* SIDEBAR BRANDING & VISIBILITY */
         section[data-testid="stSidebar"] {
             background-color: #1B5E20 !important;
         }
-        section[data-testid="stSidebar"] .stWrite { color: #E8F5E9 !important; }
-        section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2 { color: white !important; }
         
-        /* Headers and Metrics */
+        /* Logo and Title Alignment */
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        
+        /* Force all sidebar text to be white for legibility */
+        section[data-testid="stSidebar"] .stText, 
+        section[data-testid="stSidebar"] label, 
+        section[data-testid="stSidebar"] .stMarkdown p,
+        section[data-testid="stSidebar"] .stWrite,
+        section[data-testid="stSidebar"] h1, 
+        section[data-testid="stSidebar"] h2,
+        section[data-testid="stSidebar"] h3 {
+            color: #FFFFFF !important;
+        }
+
+        /* Fix specifically for dropdown labels */
+        div[data-testid="stSidebar"] .stSelectbox label p {
+            color: white !important;
+            font-weight: 600;
+        }
+
+        /* Metric Card Styling */
+        .stMetric { 
+            background-color: white; 
+            padding: 15px; 
+            border-radius: 10px; 
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.05); 
+        }
+        
+        /* Main Content Headers */
         h1, h2, h3 { color: #2E7D32 !important; font-weight: 700; }
-        .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
         
-        /* Buttons */
+        /* Button Styling */
         .stButton>button {
             background-color: #2E7D32;
             color: white;
@@ -73,9 +102,13 @@ if st.session_state.get("authentication_status"):
     BACKEND_URL = "http://127.0.0.1:5000"
     current_user_name = st.session_state.get('name', 'Officer')
     
-    # --- SIDEBAR: AGRITEX BRANDING ---
-    st.sidebar.markdown("## 🇿🇼 AGRITEX AI")
+    # --- SIDEBAR: AGRITEX BRANDING & INPUTS ---
+    LOGO_URL = "https://cdn-icons-png.flaticon.com/512/2510/2510103.png" 
+    st.sidebar.image(LOGO_URL, width=80)
+    st.sidebar.markdown("# AGRITEX AI")
+    st.sidebar.markdown("### Digital Support Unit")
     st.sidebar.markdown("---")
+    
     st.sidebar.write(f"**Logged in:** {current_user_name}")
     
     district = st.sidebar.selectbox("Select District", ["Umzingwane", "Mazabuka", "Chirundu", "Guruve"])
@@ -85,8 +118,8 @@ if st.session_state.get("authentication_status"):
     st.sidebar.markdown("---")
     authenticator.logout('Logout', 'sidebar')
 
-    # --- TOP ROW: KPI METRICS ---
-    st.title("🌾 Umzingwane Maize Yield Dashboard")
+    # --- TOP ROW: KPI METRICS (Strategic Overview) ---
+    st.title("🌾 Maize Yield Intelligence Dashboard")
     st.subheader(f"Strategic Overview: {district} - {ward}")
     
     kpi1, kpi2, kpi3, kpi4 = st.columns(4)
@@ -97,7 +130,7 @@ if st.session_state.get("authentication_status"):
 
     st.divider()
 
-    # --- MIDDLE ROW: MAP & FORECAST ---
+    # --- MIDDLE ROW: MAP & FORECAST (Side-by-Side) ---
     col_map, col_forecast = st.columns([1.5, 1])
 
     with col_map:
@@ -108,6 +141,7 @@ if st.session_state.get("authentication_status"):
                 raw_data = map_res.json().get("data", [])
                 if raw_data:
                     m_df = pd.DataFrame(raw_data)
+                    # Simulated coordinate offsets for visualization
                     m_df['lat'] = -20.30 + (m_df.index * 0.005)
                     m_df['lon'] = 28.85 + (m_df.index * 0.005)
                     st.map(m_df[['lat', 'lon']], zoom=10)
@@ -123,9 +157,8 @@ if st.session_state.get("authentication_status"):
         if st.button("Generate Localized Forecast"):
             with st.spinner("Consulting AI Engine..."):
                 try:
-                    headers = {'Content-Type': 'application/json'}
                     payload = {"variety": variety, "district": district, "ward": ward}
-                    res = requests.post(f"{BACKEND_URL}/predict_yield", json=payload, headers=headers, timeout=5)
+                    res = requests.post(f"{BACKEND_URL}/predict_yield", json=payload, timeout=5)
                     if res.status_code == 200:
                         st.session_state.forecast = res.json()
                     else:
@@ -154,6 +187,7 @@ if st.session_state.get("authentication_status"):
             if st.button("Run Smart Diagnostic"):
                 with st.spinner("Analyzing against benchmarks..."):
                     try:
+                        # getvalue() ensures data is correctly read for the request
                         files = {'file': (uploaded_file.name, uploaded_file.getvalue(), 'text/csv')}
                         payload = {'district': district, 'ward': ward, 'variety': variety}
                         res = requests.post(f"{BACKEND_URL}/analyze_csv", files=files, data=payload)
@@ -172,7 +206,7 @@ if st.session_state.get("authentication_status"):
             
             with c_top:
                 st.write(f"#### Result: {res['decision']}")
-                # Moisture Trend Chart
+                # Moisture Trend Chart styled in Forest Green
                 chart_data = pd.DataFrame(np.random.randn(15, 1), columns=['Moisture %'])
                 st.line_chart(chart_data, color="#2E7D32")
             
