@@ -25,7 +25,7 @@ authentication_status = st.session_state.get('authentication_status')
 
 if authentication_status == False:
     st.error('Username/password is incorrect')
-elif authentication_status is None:  # FIX #4: use 'is None' instead of '== None'
+elif authentication_status is None:
     st.warning('Please enter your username and password')
 elif authentication_status == True:
     BACKEND_URL = "http://127.0.0.1:5000"
@@ -44,21 +44,32 @@ elif authentication_status == True:
     # --- SECTION 1: QUICK AI FORECAST ---
     st.header(f"Live Yield Forecast: {district} - {ward}")
 
-    if st.button("Generate Forecast"):
-        try:
-            api_url = f"{BACKEND_URL}/predict_yield"
-            payload = {"variety": variety, "district": district, "ward": ward}
-            response = requests.post(api_url, json=payload)
+    if 'forecast_data' not in st.session_state:
+        st.session_state.forecast_data = None
 
-            if response.status_code == 200:
-                data = response.json()
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Predicted Yield", f"{data['predicted_yield_kg_ha']} kg/ha")
-                col2.metric("Target Hybrid", data['variety'])
-                col3.metric("System Status", data.get('interactive_status', 'Optimal'))
-                st.success(f"**Recommendation:** {data['recommendation']}")
-        except Exception as e:
-            st.error(f"Connection Error: {e}")
+    if st.button("Generate Forecast"):
+        with st.spinner("Consulting AI Engine..."):
+            try:
+                api_url = f"{BACKEND_URL}/predict_yield"
+                payload = {"variety": variety, "district": district, "ward": ward}
+                response = requests.post(api_url, json=payload, timeout=5)
+
+                if response.status_code == 200:
+                    st.session_state.forecast_data = response.json()
+                else:
+                    st.error(f"Backend Error {response.status_code}: Could not retrieve forecast.")
+            except requests.exceptions.ConnectionError:
+                st.error("❌ Connection Error: Ensure your Flask backend is running on port 5000.")
+            except Exception as e:
+                st.error(f"Unexpected Error: {e}")
+
+    if st.session_state.forecast_data:
+        data = st.session_state.forecast_data
+        st.success(f"**Recommendation:** {data.get('recommendation')}")
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Predicted Yield", f"{data.get('predicted_yield_kg_ha')} kg/ha")
+        col2.metric("Target Hybrid", data.get('variety'))
+        col3.metric("System Status", data.get('interactive_status', 'Optimal'))
 
     st.divider()
 
@@ -67,23 +78,29 @@ elif authentication_status == True:
     uploaded_file = st.file_uploader("Upload Ward Field Log", type=["csv"])
 
     if uploaded_file is not None:
+        # FIX #4: Seek to start before reading into DataFrame so pointer is at position 0
+        uploaded_file.seek(0)
         df = pd.read_csv(uploaded_file)
         st.subheader("🔍 Data Preview")
         st.dataframe(df.head(3), use_container_width=True)
 
         if st.button("Analyze & Verify Decision"):
             with st.spinner("Processing CSV against District Benchmarks..."):
-                # FIX #2: use .seek(0) then .read() for consistent file reading
+                # FIX #2: Added timeout to prevent app from hanging
                 uploaded_file.seek(0)
                 files = {'file': (uploaded_file.name, uploaded_file.read(), 'text/csv')}
                 form_data = {'district': district, 'ward': ward, 'variety': variety}
 
                 try:
-                    res = requests.post(f"{BACKEND_URL}/analyze_csv", files=files, data=form_data)
+                    res = requests.post(
+                        f"{BACKEND_URL}/analyze_csv",
+                        files=files,
+                        data=form_data,
+                        timeout=10  # FIX #2: timeout added
+                    )
                     result = res.json()
 
                     if result["status"] == "success":
-                        # 1. Decision Alert
                         if result["decision"] == "Optimal":
                             st.balloons()
                             st.success(f"### ✅ Result: {result['decision']}")
@@ -92,14 +109,10 @@ elif authentication_status == True:
                             for alert in result["alerts"]:
                                 st.warning(alert)
 
-                        # 2. Soil Health Gauge
                         st.subheader("🧪 Soil Health Diagnostic")
-
-                        # FIX #5: safely access summary keys with fallback defaults
                         avg_ph = result.get("summary", {}).get("avg_ph", 6.5)
                         avg_moisture = result.get("summary", {}).get("avg_moisture", "N/A")
 
-                        # FIX #1: snap avg_ph to nearest valid slider option to prevent crash
                         ph_options = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
                         nearest_ph = min(ph_options, key=lambda x: abs(x - avg_ph))
 
@@ -107,25 +120,23 @@ elif authentication_status == True:
                             "Soil pH Level Indicator",
                             options=ph_options,
                             value=nearest_ph,
-                            help="Maize generally thrives between 5.5 and 7.0 pH"
+                            help="Maize thrives between 5.5 and 7.0 pH"
                         )
 
                         if avg_ph < 5.5:
-                            st.error(f"Low pH Detected ({avg_ph}). Soil is too acidic for {variety}. Consider applying Lime.")
+                            st.error(f"Low pH ({avg_ph}). Soil too acidic. Apply Lime.")
                         elif avg_ph > 7.0:
-                            st.warning(f"High pH Detected ({avg_ph}). Soil is becoming alkaline. Monitor nutrient uptake.")
+                            st.warning(f"High pH ({avg_ph}). Soil alkaline. Monitor nutrients.")
                         else:
-                            st.success(f"Optimal pH ({avg_ph})! The soil environment is perfect for {variety} roots.")
+                            st.success(f"Optimal pH ({avg_ph}) for {variety}!")
 
-                        # 3. Moisture Visualization
                         if 'Soil_Moisture' in df.columns:
                             st.line_chart(df['Soil_Moisture'], use_container_width=True)
-                            st.caption("Soil Moisture Trend (%) during the reported period.")
 
-                        # --- PRINTABLE ADVICE REPORT ---
                         st.divider()
                         st.subheader("📄 Dissemination")
 
+                        # FIX #5: Restored closing footer to the report
                         report_content = f"""
 ==========================================
 MAIZE HYBRID ADVISORY REPORT
@@ -134,18 +145,13 @@ Date: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}
 Officer: {name}
 Location: {district} - {ward}
 ------------------------------------------
-CROP DETAILS:
-Variety: {variety}
 Field Status: {result['decision']}
-------------------------------------------
-SCIENTIFIC SUMMARY:
-- Average Soil Moisture: {avg_moisture}%
-- Average Soil pH: {avg_ph}
+Avg Moisture: {avg_moisture}% | Avg pH: {avg_ph}
 ------------------------------------------
 AI RECOMMENDATIONS:
 """
                         if not result["alerts"]:
-                            report_content += "- Conditions are optimal. Continue standard management.\n"
+                            report_content += "- Conditions optimal. Continue standard management.\n"
                         else:
                             for alert in result["alerts"]:
                                 report_content += f"- {alert}\n"
@@ -155,75 +161,67 @@ AI RECOMMENDATIONS:
 Generated by: Umzingwane Maize Yield AI
 ==========================================
 """
-
                         st.download_button(
-                            label="📥 Download Advice Slip for Farmer",
+                            label="📥 Download Advice Slip",
                             data=report_content,
-                            file_name=f"Maize_Advice_{ward}_{pd.Timestamp.now().strftime('%d%m%Y')}.txt",
-                            mime="text/plain",
-                            help="Click to generate a text report that can be shared or printed."
+                            file_name=f"Advice_{ward}.txt",
+                            mime="text/plain"
                         )
-                        st.info("💡 Pro-tip: This report can be shared via WhatsApp or SMS to the farmer.")
 
                     else:
                         st.error(f"Validation Error: {result['message']}")
+                except requests.exceptions.ConnectionError:
+                    st.error("❌ Connection Error: Ensure your Flask backend is running on port 5000.")
                 except Exception as e:
                     st.error(f"Server Connection Error: {e}")
 
-    st.sidebar.divider()
-    template_data = "Date,Soil_Moisture,pH_Level\n2026-03-15,42.5,6.2"
-    st.sidebar.download_button("📥 Download CSV Template", data=template_data, file_name="field_log_template.csv")
-    
-    # --- SECTION 3: LIVE REGIONAL TRENDS (FETCHED FROM DATABASE) ---
+    # --- SECTION 3: LIVE REGIONAL TRENDS ---
     st.divider()
     st.header("📊 Live Regional Performance Trends")
-    st.markdown(f"Real-time status of wards in **{district}** based on AI field reports.")
+
+    # FIX #3: Cache trends per district to avoid refetching on every widget interaction
+    @st.cache_data(ttl=30)
+    def fetch_trends(district_name):
+        res = requests.get(
+            f"{BACKEND_URL}/get_trends",
+            params={"district": district_name},
+            timeout=5
+        )
+        if res.status_code == 200:
+            return res.json().get("data", [])
+        return []
 
     try:
-        # Fetch live trends from the Backend API
-        trends_url = f"{BACKEND_URL}/get_trends"
-        trends_res = requests.get(trends_url, params={"district": district})
-        
-        if trends_res.status_code == 200:
-            trends_data = trends_res.json().get("data", [])
-            
-            if trends_data:
-                # Convert JSON response to DataFrame
-                comp_df = pd.DataFrame(trends_data)
-                
-                # Rename columns for professional display
-                comp_df.columns = ["Ward Name", "Avg Moisture (%)", "Avg pH Level", "Last Decision"]
+        trends_data = fetch_trends(district)
 
-                # Layout for Table and Insights
-                col_table, col_info = st.columns([2, 1])
-                
-                with col_table:
-                    # Styling: Color code the decision status for policymakers
-                    def color_decision(val):
-                        color = 'red' if val == 'Action Required' else 'green'
-                        return f'color: {color}; font-weight: bold'
+        if trends_data:
+            comp_df = pd.DataFrame(trends_data)
 
-                    st.dataframe(
-                        comp_df.style.map(color_decision, subset=['Last Decision']),
-                        use_container_width=True,
-                        hide_index=True
-                    )
-                
-                with col_info:
-                    # Dynamic Insight based on the most common status
-                    critical_count = len(comp_df[comp_df['Last Decision'] == 'Action Required'])
-                    if critical_count > 0:
-                        st.error(f"⚠️ **Attention:** {critical_count} ward(s) in {district} require immediate agronomic intervention.")
+            # FIX #1: Rename columns by their actual backend key names, not by position
+            comp_df = comp_df.rename(columns={
+                "ward": "Ward",
+                "avg_moisture": "Moisture (%)",
+                "avg_ph": "pH Level",
+                "decision": "Last Decision"
+            })
+
+            col_table, col_info = st.columns([2, 1])
+            with col_table:
+                st.dataframe(comp_df, use_container_width=True, hide_index=True)
+            with col_info:
+                if "Last Decision" in comp_df.columns:
+                    crit = len(comp_df[comp_df['Last Decision'] == 'Action Required'])
+                    if crit > 0:
+                        st.error(f"⚠️ {crit} wards need attention.")
                     else:
-                        st.success(f"✅ **Summary:** All reporting wards in {district} are currently within optimal thresholds.")
-            else:
-                st.info(f"📅 No field reports have been recorded for **{district}** yet. Upload a CSV above to start tracking regional trends.")
+                        st.success("✅ All wards optimal.")
         else:
-            st.error("Could not retrieve regional trends from the server.")
-            
-    except Exception as e:
-        st.warning(f"Connection to Trends Engine failed: {e}")
+            st.info(f"No trend data for {district} yet. Upload a CSV to populate this section.")
 
-    # --- SYSTEM FOOTER ---
+    except requests.exceptions.ConnectionError:
+        st.warning("⚠️ Could not load regional trends: Flask backend not reachable.")
+    except Exception as e:
+        st.warning(f"Could not load regional trends: {e}")
+
     st.markdown("---")
-    st.caption(f"🇿🇼 **Umzingwane Maize AI** | Phase 7.2 Deployment | Active User: {name}")
+    st.caption(f"🇿🇼 Umzingwane Maize AI | Active: {name}")
