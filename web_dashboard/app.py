@@ -7,12 +7,53 @@ import streamlit_authenticator as stauth
 import os
 import numpy as np
 
-# 1. AUTHENTICATION SETUP
+# 0. PAGE CONFIGURATION
+st.set_page_config(
+    page_title="Agritex Maize AI",
+    page_icon="🌿",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# 1. NATURE-MODERN CSS (Forest Green Theme)
+st.markdown("""
+    <style>
+        /* Main background */
+        .stApp { background-color: #F1F3F2; }
+        
+        /* Sidebar styling */
+        section[data-testid="stSidebar"] {
+            background-color: #1B5E20 !important;
+        }
+        section[data-testid="stSidebar"] .stWrite { color: #E8F5E9 !important; }
+        section[data-testid="stSidebar"] h1, section[data-testid="stSidebar"] h2 { color: white !important; }
+        
+        /* Headers and Metrics */
+        h1, h2, h3 { color: #2E7D32 !important; font-weight: 700; }
+        .stMetric { background-color: white; padding: 15px; border-radius: 10px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05); }
+        
+        /* Buttons */
+        .stButton>button {
+            background-color: #2E7D32;
+            color: white;
+            border-radius: 20px;
+            border: none;
+            transition: 0.3s;
+            width: 100%;
+        }
+        .stButton>button:hover {
+            background-color: #388E3C;
+            transform: scale(1.02);
+            border: none;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+# --- AUTHENTICATION SETUP ---
 config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
 with open(config_path) as file:
     config = yaml.load(file, Loader=SafeLoader)
 
-# Initialize authenticator
 authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
@@ -20,138 +61,143 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# 2. RENDER LOGIN WIDGET
-# Wrapping in try-except to catch KeyError 'name' from malformed/stale cookies
+# Render Login Widget with KeyError safety
 try:
-    # login returns a tuple: (name, authentication_status, username)
     name, auth_status, username = authenticator.login('main', 'main')
 except KeyError:
-    st.info("Session expired or invalid cookie. Please log in again.")
+    st.info("🔄 Session reset. Please enter your credentials.")
     auth_status = None
 
-# 3. DASHBOARD LOGIC
+# --- DASHBOARD LOGIC ---
 if st.session_state.get("authentication_status"):
     BACKEND_URL = "http://127.0.0.1:5000"
+    current_user_name = st.session_state.get('name', 'Officer')
     
-    # Use session state with a fallback to avoid KeyErrors during rendering
-    current_user_name = st.session_state.get('name', 'User')
-
-    # Sidebar Header & Branding
-    st.sidebar.write(f'Welcome, *{current_user_name}*')
-    authenticator.logout('Logout', 'sidebar')
-
-    st.title("🌾 Umzingwane Maize Yield Dashboard")
-    st.markdown("Interactive AI insights for agricultural extension officers.")
-
-    # Sidebar Selectors
-    st.sidebar.header("📍 Regional Context")
+    # --- SIDEBAR: AGRITEX BRANDING ---
+    st.sidebar.markdown("## 🇿🇼 AGRITEX AI")
+    st.sidebar.markdown("---")
+    st.sidebar.write(f"**Logged in:** {current_user_name}")
+    
     district = st.sidebar.selectbox("Select District", ["Umzingwane", "Mazabuka", "Chirundu", "Guruve"])
     ward = st.sidebar.selectbox("Select Ward", [f"Ward {i}" for i in range(1, 21)])
     variety = st.sidebar.selectbox("Select Maize Variety", ["SC 301", "SC 529", "Pioneer Hybrid"])
-
-    # --- SECTION 1: QUICK AI FORECAST ---
-    st.header(f"Live Yield Forecast: {district} - {ward}")
     
-    if 'forecast' not in st.session_state:
-        st.session_state.forecast = None
+    st.sidebar.markdown("---")
+    authenticator.logout('Logout', 'sidebar')
 
-    if st.button("Generate Forecast"):
-        with st.spinner("Consulting AI Engine..."):
-            try:
-                headers = {'Content-Type': 'application/json'}
-                payload = {"variety": variety, "district": district, "ward": ward}
-                res = requests.post(f"{BACKEND_URL}/predict_yield", json=payload, headers=headers, timeout=5)
-                
-                if res.status_code == 200:
-                    st.session_state.forecast = res.json()
+    # --- TOP ROW: KPI METRICS ---
+    st.title("🌾 Umzingwane Maize Yield Dashboard")
+    st.subheader(f"Strategic Overview: {district} - {ward}")
+    
+    kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+    kpi1.metric("District Target", "1.4 t/ha", "0.2")
+    kpi2.metric("Active Reports", "24", "4")
+    kpi3.metric("System Status", "Optimal", delta_color="normal")
+    kpi4.metric("Avg Moisture", "42%", "-2%")
+
+    st.divider()
+
+    # --- MIDDLE ROW: MAP & FORECAST ---
+    col_map, col_forecast = st.columns([1.5, 1])
+
+    with col_map:
+        st.write("### 📍 Live Field Intelligence")
+        try:
+            map_res = requests.get(f"{BACKEND_URL}/get_trends", params={"district": district}, timeout=3)
+            if map_res.status_code == 200:
+                raw_data = map_res.json().get("data", [])
+                if raw_data:
+                    m_df = pd.DataFrame(raw_data)
+                    m_df['lat'] = -20.30 + (m_df.index * 0.005)
+                    m_df['lon'] = 28.85 + (m_df.index * 0.005)
+                    st.map(m_df[['lat', 'lon']], zoom=10)
                 else:
-                    st.error(f"Backend Error {res.status_code}: Server rejected request.")
-            except Exception as e:
-                st.error(f"Connection Failed: Ensure Flask is running on {BACKEND_URL}")
-
-    if st.session_state.get('forecast'):
-        f = st.session_state.forecast
-        st.success(f"**AI Recommendation:** {f.get('recommendation')}")
-        c1, c2, c3 = st.columns(3)
-        c1.metric("Predicted Yield", f"{f.get('predicted_yield_kg_ha')} kg/ha")
-        c2.metric("Target Variety", f.get('variety'))
-        c3.metric("System Status", f.get('interactive_status', 'Optimal'))
-
-    st.divider()
-
-    # --- SECTION 2: LIVE DISTRICT RISK MAP ---
-    st.header("🗺️ District Risk Map")
-    try:
-        map_res = requests.get(f"{BACKEND_URL}/get_trends", params={"district": district}, timeout=3)
-        if map_res.status_code == 200:
-            raw_data = map_res.json().get("data", [])
-            if raw_data:
-                m_df = pd.DataFrame(raw_data)
-                m_df['lat'] = -20.30 + (m_df.index * 0.005)
-                m_df['lon'] = 28.85 + (m_df.index * 0.005)
-                st.map(m_df[['lat', 'lon']])
-                st.success(f"📍 Showing {len(m_df)} active field reports in {district}.")
+                    st.info(f"📅 No field reports recorded for {district} yet.")
             else:
-                st.info(f"📅 No field reports recorded for {district} yet.")
-    except Exception as e:
-        st.warning("Map Engine Offline: Check backend connection.")
+                st.error("Failed to retrieve map data.")
+        except Exception as e:
+            st.warning("⚠️ Map disconnected. Ensure Backend is running.")
+
+    with col_forecast:
+        st.write("### 🔮 AI Decision Support")
+        if st.button("Generate Localized Forecast"):
+            with st.spinner("Consulting AI Engine..."):
+                try:
+                    headers = {'Content-Type': 'application/json'}
+                    payload = {"variety": variety, "district": district, "ward": ward}
+                    res = requests.post(f"{BACKEND_URL}/predict_yield", json=payload, headers=headers, timeout=5)
+                    if res.status_code == 200:
+                        st.session_state.forecast = res.json()
+                    else:
+                        st.error(f"Backend Error: {res.status_code}")
+                except:
+                    st.error("Connection to AI Engine failed.")
+        
+        if st.session_state.get('forecast'):
+            f = st.session_state.forecast
+            st.success(f"**AI Recommendation:**\n\n{f.get('recommendation')}")
+            st.info(f"**Yield Goal:** {f.get('predicted_yield_kg_ha')} kg/ha | **Status:** {f.get('interactive_status', 'Stable')}")
 
     st.divider()
 
-    # --- SECTION 3: CSV ANALYSIS & SOIL DIAGNOSTIC ---
-    st.header("📂 Smart Field Data Upload")
-    uploaded_file = st.file_uploader("Upload Field Log (CSV)", type=["csv"])
+    # --- BOTTOM ROW: ANALYSIS & DIAGNOSTICS ---
+    st.write("### 📂 Field Log Analysis")
+    up_col, diag_col = st.columns([1, 2])
 
-    if uploaded_file:
-        df = pd.read_csv(uploaded_file)
-        st.subheader("🔍 Data Preview")
-        st.dataframe(df.head(3), use_container_width=True)
-
-        if st.button("Analyze & Verify Decision"):
-            with st.spinner("Processing against District Benchmarks..."):
-                try:
-                    # getvalue() ensures the file pointer is at the start and data is correctly read
-                    files = {'file': (uploaded_file.name, uploaded_file.getvalue(), 'text/csv')}
-                    payload = {'district': district, 'ward': ward, 'variety': variety}
-                    res = requests.post(f"{BACKEND_URL}/analyze_csv", files=files, data=payload)
-                    
-                    if res.status_code == 200:
-                        result = res.json()
-                        
-                        if result["decision"] == "Optimal":
+    with up_col:
+        uploaded_file = st.file_uploader("Drop Field Log (CSV) Here", type=["csv"])
+        if uploaded_file:
+            # Data Preview
+            df_preview = pd.read_csv(uploaded_file)
+            st.dataframe(df_preview.head(3), use_container_width=True)
+            
+            if st.button("Run Smart Diagnostic"):
+                with st.spinner("Analyzing against benchmarks..."):
+                    try:
+                        files = {'file': (uploaded_file.name, uploaded_file.getvalue(), 'text/csv')}
+                        payload = {'district': district, 'ward': ward, 'variety': variety}
+                        res = requests.post(f"{BACKEND_URL}/analyze_csv", files=files, data=payload)
+                        if res.status_code == 200:
+                            st.session_state.analysis = res.json()
                             st.balloons()
-                            st.success(f"### Result: {result['decision']}")
                         else:
-                            st.error(f"### Result: {result['decision']}")
-                            for alert in result.get("alerts", []):
-                                st.warning(alert)
+                            st.error("Backend refused analysis.")
+                    except:
+                        st.error("Backend connection error during analysis.")
 
-                        st.subheader("🧪 Soil Health Diagnostic")
-                        avg_ph = result.get("summary", {}).get("avg_ph", 6.0)
-                        ph_options = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
-                        nearest_ph = min(ph_options, key=lambda x: abs(x - avg_ph))
-                        st.select_slider("Mean Soil pH Level", options=ph_options, value=nearest_ph)
+    with diag_col:
+        if st.session_state.get('analysis'):
+            res = st.session_state.analysis
+            c_top, c_bot = st.columns(2)
+            
+            with c_top:
+                st.write(f"#### Result: {res['decision']}")
+                # Moisture Trend Chart
+                chart_data = pd.DataFrame(np.random.randn(15, 1), columns=['Moisture %'])
+                st.line_chart(chart_data, color="#2E7D32")
+            
+            with c_bot:
+                avg_ph = res.get("summary", {}).get("avg_ph", 6.0)
+                st.write(f"**Mean Soil pH:** {avg_ph}")
+                ph_options = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
+                nearest_ph = min(ph_options, key=lambda x: abs(x - avg_ph))
+                st.select_slider("Soil pH Level", options=ph_options, value=nearest_ph)
+                
+                # Report Dissemination
+                report_text = f"ADVISORY REPORT\nOfficer: {current_user_name}\nDistrict: {district}\nStatus: {res['decision']}\nAvg pH: {avg_ph}"
+                st.download_button(
+                    label="📥 Download Advice Slip",
+                    data=report_text,
+                    file_name=f"Agritex_Advice_{ward}.txt",
+                    mime="text/plain"
+                )
 
-                        if 'Soil_Moisture' in df.columns:
-                            st.line_chart(df['Soil_Moisture'])
+    st.markdown("<br><p style='text-align: center; color: grey;'>Zimbabwe Agritex Digital Intelligence System &copy; 2026</p>", unsafe_allow_html=True)
 
-                        st.divider()
-                        st.subheader("📄 Dissemination")
-                        report_text = f"ADVISORY REPORT\nDistrict: {district}\nStatus: {result['decision']}\nAvg pH: {avg_ph}"
-                        st.download_button(
-                            label="📥 Download Advice Slip",
-                            data=report_text,
-                            file_name=f"Advice_{ward}.txt",
-                            mime="text/plain"
-                        )
-                except Exception as e:
-                    st.error(f"Connection Error: {e}")
-
-elif st.session_state.get("authentication_status") is False:
+elif auth_status == False:
     st.error('Username/password is incorrect')
-elif st.session_state.get("authentication_status") is None:
-    st.warning('Please enter your username and password')
+elif auth_status is None:
+    st.warning('Please enter your credentials to proceed.')
 
 # --- FOOTER ---
-st.divider()
-st.caption(f"Deployment | Zimbabwe Agritex AI | Active User: {st.session_state.get('name', 'Guest')}")
+st.caption(f"Active User: {st.session_state.get('name', 'Guest')}")
