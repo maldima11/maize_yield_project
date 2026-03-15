@@ -34,7 +34,7 @@ elif authentication_status == True:
     authenticator.logout('Logout', 'sidebar')
 
     st.title("🌾 Umzingwane Maize Yield Dashboard")
-    st.markdown("Phase 7: Interactive AI insights for smallholder farmers and extension officers.")
+    st.markdown("Interactive AI insights for smallholder farmers and extension officers.")
 
     st.sidebar.header("📍 Regional Context")
     district = st.sidebar.selectbox("Select District", ["Umzingwane", "Mazabuka", "Chirundu", "Guruve"])
