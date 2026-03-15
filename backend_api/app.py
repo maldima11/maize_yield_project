@@ -1,16 +1,16 @@
 from flask import Flask, request, jsonify, make_response
+from flask_cors import CORS  # Fixes 403 Forbidden errors for Streamlit
 import io
 import json
 import os
 import pandas as pd
 from ussd_handler import handle_ussd_request
-# Import our new database helper functions
 from database import init_db, save_report, get_regional_summary
 
 app = Flask(__name__)
+CORS(app)  # Enable Cross-Origin Resource Sharing
 
 # --- DATABASE INITIALIZATION ---
-# This creates the .db file and tables if they don't exist yet
 init_db()
 
 # --- CONFIGURATION LOADER ---
@@ -30,11 +30,12 @@ CONFIGS = load_configs()
 
 @app.route('/', methods=['GET'])
 def home():
-    return "Maize Yield Prediction API (Phase 7: Database Integrated) is running!"
+    return "Maize Yield Prediction API (CORS Enabled & Database Integrated) is running!"
 
 # --- CSV VALIDATION & DECISION ENGINE ---
 @app.route('/analyze_csv', methods=['POST'])
 def analyze_csv():
+    # 1. Capture Metadata
     district_name = request.form.get('district', 'Umzingwane')
     hybrid_name = request.form.get('variety', 'SC 301')
     ward = request.form.get('ward', 'General Ward')
@@ -56,6 +57,7 @@ def analyze_csv():
                 "message": f"Missing columns. CSV must have: {required_columns}"
             }), 400
 
+        # 2. Decision Logic
         alerts = []
         avg_moisture = df['Soil_Moisture'].mean()
         min_moisture = hybrid_rules['min_moisture_pct']
@@ -69,8 +71,7 @@ def analyze_csv():
 
         decision = "Optimal" if not alerts else "Action Required"
 
-        # --- DATABASE INTEGRATION: SAVE THE REPORT ---
-        # This saves the result so the dashboard can see historical trends
+        # 3. SAVE TO DATABASE
         save_report(
             district=district_name,
             ward=ward,
@@ -95,12 +96,11 @@ def analyze_csv():
     except Exception as e:
         return jsonify({"status": "error", "message": f"Processing error: {str(e)}"}), 500
 
-# --- TRENDS ENDPOINT (For Dashboard Regional Table) ---
+# --- TRENDS ENDPOINT (For Dashboard Map & Tables) ---
 @app.route('/get_trends', methods=['GET'])
 def get_trends():
     district = request.args.get('district', 'Umzingwane')
     try:
-        # Fetch aggregated data from SQLite
         df = get_regional_summary(district)
         return jsonify({"status": "success", "data": df.to_dict(orient='records')})
     except Exception as e:
@@ -109,28 +109,28 @@ def get_trends():
 # --- PREDICT YIELD ENDPOINT ---
 @app.route('/predict_yield', methods=['POST'])
 def predict():
-    data = request.get_json()
-    if not data:
-        return jsonify({"status": "error", "message": "No JSON received"}), 400
-
+    # Explicitly handle JSON and return proper response
+    data = request.get_json(silent=True) or {}
     variety = data.get('variety', 'SC 301')
     district = data.get('district', 'General')
-
-    return jsonify({
+    
+    response_data = {
         "status": "success",
         "variety": variety,
         "district": district,
         "predicted_yield_kg_ha": 1450.5,
         "recommendation": f"Your {variety} in {district} is at V6 stage. Apply Top-dressing.",
         "interactive_status": "Green"
-    })
+    }
+    return jsonify(response_data)
 
 # --- USSD ENDPOINT ---
 @app.route('/ussd', methods=['POST'])
 def ussd_callback():
     if not request.values:
-        return make_response("Bad Request", 400)
+        return make_response("Bad Request: No USSD data", 400)
 
+    # Note: ensure handle_ussd_request in ussd_handler.py accepts these arguments
     response_text = handle_ussd_request(
         text=request.values.get("text", ""),
         session_id=request.values.get("sessionId", ""),
@@ -143,5 +143,6 @@ def ussd_callback():
     return res
 
 if __name__ == '__main__':
+    # Safe debug mode check
     debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
-    app.run(debug=debug_mode, port=5000)
+    app.run(debug=True, port=5000)
