@@ -12,6 +12,7 @@ config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
 with open(config_path) as file:
     config = yaml.load(file, Loader=SafeLoader)
 
+# Initialize authenticator
 authenticator = stauth.Authenticate(
     config['credentials'],
     config['cookie']['name'],
@@ -19,20 +20,24 @@ authenticator = stauth.Authenticate(
     config['cookie']['expiry_days']
 )
 
-# Render Login Widget
-authenticator.login('main')
-name = st.session_state.get('name')
-auth_status = st.session_state.get('authentication_status')
+# 2. RENDER LOGIN WIDGET
+# Wrapping in try-except to catch KeyError 'name' from malformed/stale cookies
+try:
+    # login returns a tuple: (name, authentication_status, username)
+    name, auth_status, username = authenticator.login('main', 'main')
+except KeyError:
+    st.info("Session expired or invalid cookie. Please log in again.")
+    auth_status = None
 
-if auth_status == False:
-    st.error('Username/password is incorrect')
-elif auth_status is None:
-    st.warning('Please enter your username and password')
-elif auth_status == True:
+# 3. DASHBOARD LOGIC
+if st.session_state.get("authentication_status"):
     BACKEND_URL = "http://127.0.0.1:5000"
+    
+    # Use session state with a fallback to avoid KeyErrors during rendering
+    current_user_name = st.session_state.get('name', 'User')
 
     # Sidebar Header & Branding
-    st.sidebar.write(f'Welcome, *{name}*')
+    st.sidebar.write(f'Welcome, *{current_user_name}*')
     authenticator.logout('Logout', 'sidebar')
 
     st.title("🌾 Umzingwane Maize Yield Dashboard")
@@ -53,7 +58,6 @@ elif auth_status == True:
     if st.button("Generate Forecast"):
         with st.spinner("Consulting AI Engine..."):
             try:
-                # Headers included to prevent 403 Forbidden errors
                 headers = {'Content-Type': 'application/json'}
                 payload = {"variety": variety, "district": district, "ward": ward}
                 res = requests.post(f"{BACKEND_URL}/predict_yield", json=payload, headers=headers, timeout=5)
@@ -61,11 +65,11 @@ elif auth_status == True:
                 if res.status_code == 200:
                     st.session_state.forecast = res.json()
                 else:
-                    st.error(f"Backend Error {res.status_code}: The server rejected the request.")
+                    st.error(f"Backend Error {res.status_code}: Server rejected request.")
             except Exception as e:
-                st.error(f"Connection Failed: Ensure the Flask backend is running on {BACKEND_URL}")
+                st.error(f"Connection Failed: Ensure Flask is running on {BACKEND_URL}")
 
-    if st.session_state.forecast:
+    if st.session_state.get('forecast'):
         f = st.session_state.forecast
         st.success(f"**AI Recommendation:** {f.get('recommendation')}")
         c1, c2, c3 = st.columns(3)
@@ -78,23 +82,17 @@ elif auth_status == True:
     # --- SECTION 2: LIVE DISTRICT RISK MAP ---
     st.header("🗺️ District Risk Map")
     try:
-        # Fetching real data from the database via Backend
         map_res = requests.get(f"{BACKEND_URL}/get_trends", params={"district": district}, timeout=3)
         if map_res.status_code == 200:
             raw_data = map_res.json().get("data", [])
-            
             if raw_data:
                 m_df = pd.DataFrame(raw_data)
-                # Dynamic coordinate generation for visualization (centered on Zimbabwe region)
                 m_df['lat'] = -20.30 + (m_df.index * 0.005)
                 m_df['lon'] = 28.85 + (m_df.index * 0.005)
-                
                 st.map(m_df[['lat', 'lon']])
                 st.success(f"📍 Showing {len(m_df)} active field reports in {district}.")
             else:
                 st.info(f"📅 No field reports recorded for {district} yet.")
-        else:
-            st.error("Failed to retrieve map data from backend.")
     except Exception as e:
         st.warning("Map Engine Offline: Check backend connection.")
 
@@ -105,7 +103,6 @@ elif auth_status == True:
     uploaded_file = st.file_uploader("Upload Field Log (CSV)", type=["csv"])
 
     if uploaded_file:
-        # Load and Preview Data
         df = pd.read_csv(uploaded_file)
         st.subheader("🔍 Data Preview")
         st.dataframe(df.head(3), use_container_width=True)
@@ -113,16 +110,14 @@ elif auth_status == True:
         if st.button("Analyze & Verify Decision"):
             with st.spinner("Processing against District Benchmarks..."):
                 try:
-                    # Using getvalue() for robust file transmission
+                    # getvalue() ensures the file pointer is at the start and data is correctly read
                     files = {'file': (uploaded_file.name, uploaded_file.getvalue(), 'text/csv')}
                     payload = {'district': district, 'ward': ward, 'variety': variety}
-                    
                     res = requests.post(f"{BACKEND_URL}/analyze_csv", files=files, data=payload)
                     
                     if res.status_code == 200:
                         result = res.json()
                         
-                        # 1. Decision Status & Visual Feedback
                         if result["decision"] == "Optimal":
                             st.balloons()
                             st.success(f"### Result: {result['decision']}")
@@ -131,44 +126,32 @@ elif auth_status == True:
                             for alert in result.get("alerts", []):
                                 st.warning(alert)
 
-                        # 2. Soil Health Diagnostic Gauge
                         st.subheader("🧪 Soil Health Diagnostic")
                         avg_ph = result.get("summary", {}).get("avg_ph", 6.0)
                         ph_options = [3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0]
                         nearest_ph = min(ph_options, key=lambda x: abs(x - avg_ph))
                         st.select_slider("Mean Soil pH Level", options=ph_options, value=nearest_ph)
 
-                        # 3. Moisture Trend Visualization
                         if 'Soil_Moisture' in df.columns:
                             st.line_chart(df['Soil_Moisture'])
-                            st.caption("Moisture trend from uploaded field data.")
 
-                        # 4. DOWNLOADABLE REPORT GENERATOR
                         st.divider()
                         st.subheader("📄 Dissemination")
-                        report_text = f"""
-==========================================
-MAIZE ADVISORY REPORT: {ward}
-==========================================
-Officer: {name} | District: {district}
-Variety: {variety} | Status: {result['decision']}
-Avg Soil pH: {avg_ph} | Avg Moisture: {result.get('summary', {}).get('avg_moisture')}%
-------------------------------------------
-Agritex Digital Support System
-Generated: {pd.Timestamp.now().strftime('%Y-%m-%d')}
-==========================================
-"""
+                        report_text = f"ADVISORY REPORT\nDistrict: {district}\nStatus: {result['decision']}\nAvg pH: {avg_ph}"
                         st.download_button(
                             label="📥 Download Advice Slip",
                             data=report_text,
-                            file_name=f"Advice_{ward}_{variety}.txt",
+                            file_name=f"Advice_{ward}.txt",
                             mime="text/plain"
                         )
-                    else:
-                        st.error("Analysis Failed: The backend rejected the file format.")
                 except Exception as e:
                     st.error(f"Connection Error: {e}")
 
-    # --- FOOTER ---
-    st.divider()
-    st.caption(f"Deployment | Zimbabwe Agritex AI | Active User: {name}")
+elif st.session_state.get("authentication_status") is False:
+    st.error('Username/password is incorrect')
+elif st.session_state.get("authentication_status") is None:
+    st.warning('Please enter your username and password')
+
+# --- FOOTER ---
+st.divider()
+st.caption(f"Deployment | Zimbabwe Agritex AI | Active User: {st.session_state.get('name', 'Guest')}")
