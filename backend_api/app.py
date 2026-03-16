@@ -180,5 +180,6 @@ def ussd_callback():
 
 
 if __name__ == '__main__':
-    # Force debug to True so the server actually responds to your changes
-    app.run(debug=True, port=5000, host='0.0.0.0')
+    # host='0.0.0.0' tells Flask to listen to the tunnel
+    # threaded=True helps handle multiple requests from AT
+    app.run(debug=True, port=5000, host='0.0.0.0', threaded=True)
