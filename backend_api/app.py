@@ -180,6 +180,5 @@ def ussd_callback():
 
 
 if __name__ == '__main__':
-    # FIX #3: Use environment variable to control debug mode safely
-    debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
-    app.run(debug=debug_mode, port=5000)
+    # Force debug to True so the server actually responds to your changes
+    app.run(debug=True, port=5000, host='0.0.0.0')
