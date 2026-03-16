@@ -288,7 +288,7 @@ elif auth_status == True:
         </div>
         """, unsafe_allow_html=True)
 
-        authenticator.logout("🚪  Logout", "sidebar")
+        authenticator.logout("Logout", "sidebar")
 
         st.markdown("""
         <div style="text-align:center;padding-top:1.5rem;">
@@ -319,7 +319,7 @@ elif auth_status == True:
     with k2:
         st.markdown("""<div class="kpi-card gold">
             <div class="kpi-label">Active Reports</div>
-            <div class="kpi-value">24</div>
+            <div class="kpi-value">4</div>
             <div class="kpi-delta">▲ 4 new this week</div>
         </div>""", unsafe_allow_html=True)
     with k3:
