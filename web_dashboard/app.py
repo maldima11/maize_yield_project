@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import requests
 import yaml
@@ -13,7 +14,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-st.markdown("""
+# ── CSS injection via components.html so Streamlit cannot strip the style tag ──
+components.html("""
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -23,15 +25,20 @@ st.markdown("""
     --soil:         #6D4C41;
     --gold:         #F9A825;
     --cream:        #F5F0E8;
-    --text-dark:    #1A1A1A;
     --text-light:   #888;
     --danger:       #C62828;
     --shadow:       0 4px 24px rgba(0,0,0,0.08);
     --radius:       16px;
 }
-.stApp { background: var(--cream); font-family: 'DM Sans', sans-serif; }
-#MainMenu, footer { visibility: hidden; }
-.block-container { padding: 2rem 2.5rem 3rem !important; max-width: 1400px; }
+</style>
+<script>
+// Inject styles into the parent Streamlit document
+const css = `
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+.stApp { background: #F5F0E8 !important; font-family: 'DM Sans', sans-serif !important; }
+#MainMenu, footer { visibility: hidden !important; }
+.block-container { padding: 2rem 2.5rem 3rem !important; max-width: 1400px !important; }
 
 section[data-testid="stSidebar"] {
     background: linear-gradient(175deg, #0D2B0F 0%, #1B5E20 60%, #2E7D32 100%) !important;
@@ -43,9 +50,6 @@ section[data-testid="stSidebar"] p,
 section[data-testid="stSidebar"] span,
 section[data-testid="stSidebar"] label,
 section[data-testid="stSidebar"] div,
-section[data-testid="stSidebar"] h1,
-section[data-testid="stSidebar"] h2,
-section[data-testid="stSidebar"] h3,
 section[data-testid="stSidebar"] small,
 section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
     color: white !important;
@@ -72,61 +76,114 @@ section[data-testid="stSidebar"] .stButton > button {
     border-radius: 10px !important;
     width: 100% !important;
     font-size: 0.85rem !important;
-    font-family: 'DM Sans', sans-serif !important;
     transition: background 0.2s !important;
-}
-section[data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(255,255,255,0.22) !important;
 }
 section[data-testid="stSidebar"] hr {
     border-color: rgba(255,255,255,0.2) !important;
-    margin: 0.6rem 0 !important;
 }
+/* ── Sidebar collapse/expand toggle ── */
 [data-testid="collapsedControl"] {
     display: flex !important;
     visibility: visible !important;
     background: #2E7D32 !important;
     border-radius: 0 8px 8px 0 !important;
-    box-shadow: 2px 0 8px rgba(0,0,0,0.25) !important;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.2) !important;
+    overflow: hidden !important;
 }
-[data-testid="collapsedControl"] svg { fill: white !important; stroke: white !important; }
+[data-testid="collapsedControl"] svg {
+    fill: white !important;
+    stroke: white !important;
+}
+/* Hide the broken Material icon text (keyboard_double_arrow_left etc) */
+[data-testid="stSidebarCollapseButton"] span,
+[data-testid="stSidebarCollapseButton"] .material-symbols-rounded {
+    font-size: 0 !important;
+    visibility: hidden !important;
+}
+/* Replace with a clean CSS arrow instead */
+[data-testid="stSidebarCollapseButton"] button {
+    background: #2E7D32 !important;
+    border: none !important;
+    border-radius: 0 8px 8px 0 !important;
+    width: 24px !important;
+    height: 48px !important;
+    cursor: pointer !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+[data-testid="stSidebarCollapseButton"] button::after {
+    content: '‹' !important;
+    font-size: 1.4rem !important;
+    color: white !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    visibility: visible !important;
+    font-family: sans-serif !important;
+}
+/* Also fix the top-left expand button when sidebar is collapsed */
+[data-testid="collapsedControl"] button {
+    background: #2E7D32 !important;
+    border: none !important;
+    width: 24px !important;
+    height: 48px !important;
+    position: relative !important;
+    overflow: hidden !important;
+}
+[data-testid="collapsedControl"] button span {
+    font-size: 0 !important;
+    visibility: hidden !important;
+}
+[data-testid="collapsedControl"] button::after {
+    content: '›' !important;
+    font-size: 1.4rem !important;
+    color: white !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    visibility: visible !important;
+    font-family: sans-serif !important;
+}
 
 .page-header { margin-bottom: 1.8rem; padding-bottom: 1.2rem; border-bottom: 2px solid rgba(46,125,50,0.15); }
-.page-title  { font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 900; color: var(--earth-dark); margin: 0; }
-.page-sub    { font-size: 0.88rem; color: var(--text-light); margin-top: 0.25rem; }
-.live-badge  { display: inline-flex; align-items: center; gap: 6px; background: #E8F5E9; border: 1px solid #A5D6A7; color: var(--earth-bright); font-size: 0.73rem; font-weight: 600; padding: 5px 13px; border-radius: 999px; margin-top: 0.6rem; }
-.live-dot    { width: 7px; height: 7px; background: var(--leaf); border-radius: 50%; animation: pulse 1.8s infinite; }
+.page-title { font-family: 'Playfair Display', serif !important; font-size: 2rem; font-weight: 900; color: #0D2B0F; margin: 0; }
+.page-sub { font-size: 0.88rem; color: #888; margin-top: 0.25rem; }
+.live-badge { display: inline-flex; align-items: center; gap: 6px; background: #E8F5E9; border: 1px solid #A5D6A7; color: #2E7D32; font-size: 0.73rem; font-weight: 600; padding: 5px 13px; border-radius: 999px; margin-top: 0.6rem; }
+.live-dot { width: 7px; height: 7px; background: #4CAF50; border-radius: 50%; animation: pulse 1.8s infinite; }
 @keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.5); } }
 
-.kpi-card { background: white; border-radius: var(--radius); padding: 1.3rem 1.5rem; box-shadow: var(--shadow); border-left: 4px solid var(--leaf); transition: transform 0.2s, box-shadow 0.2s; }
+.kpi-card { background: white; border-radius: 16px; padding: 1.3rem 1.5rem; box-shadow: 0 4px 24px rgba(0,0,0,0.08); border-left: 4px solid #4CAF50; transition: transform 0.2s, box-shadow 0.2s; }
 .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
-.kpi-card.gold { border-left-color: var(--gold); }
-.kpi-card.soil { border-left-color: var(--soil); }
-.kpi-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-light); font-weight: 600; margin-bottom: 0.4rem; }
-.kpi-value { font-family: 'Playfair Display', serif; font-size: 1.9rem; font-weight: 700; color: var(--earth-dark); line-height: 1.1; }
-.kpi-delta { font-size: 0.78rem; color: var(--leaf); font-weight: 600; margin-top: 0.25rem; }
-.kpi-delta.neg { color: var(--danger); }
+.kpi-card.gold { border-left-color: #F9A825; }
+.kpi-card.soil { border-left-color: #6D4C41; }
+.kpi-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: #888; font-weight: 600; margin-bottom: 0.4rem; }
+.kpi-value { font-family: 'Playfair Display', serif; font-size: 1.9rem; font-weight: 700; color: #0D2B0F; line-height: 1.1; }
+.kpi-delta { font-size: 0.78rem; color: #4CAF50; font-weight: 600; margin-top: 0.25rem; }
+.kpi-delta.neg { color: #C62828; }
 
-.section-title { font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 700; color: var(--earth-dark); margin-bottom: 0.8rem; }
+.section-title { font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 700; color: #0D2B0F; margin-bottom: 0.8rem; }
 
 .stButton > button { background: linear-gradient(135deg, #2E7D32, #4CAF50) !important; color: white !important; border: none !important; border-radius: 12px !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; box-shadow: 0 4px 12px rgba(46,125,50,0.3) !important; transition: all 0.2s !important; }
 .stButton > button:hover { transform: translateY(-2px) !important; box-shadow: 0 8px 20px rgba(46,125,50,0.4) !important; }
 
 [data-testid="stFileUploader"] { background: #F8FBF8 !important; border: 2px dashed #A5D6A7 !important; border-radius: 14px !important; }
-
-[data-testid="stMetric"] { background: white; border-radius: 12px; padding: 1rem; box-shadow: var(--shadow); }
-[data-testid="stMetricValue"] { font-family:'Playfair Display',serif !important; font-size: 1.5rem !important; color: var(--earth-dark) !important; }
-[data-testid="stMetricLabel"] { font-size: 0.73rem !important; text-transform: uppercase !important; letter-spacing: 0.08em !important; color: var(--text-light) !important; }
-
-[data-testid="stDownloadButton"] > button { background: white !important; color: var(--earth-bright) !important; border: 2px solid var(--earth-bright) !important; border-radius: 12px !important; font-weight: 600 !important; box-shadow: none !important; }
-[data-testid="stDownloadButton"] > button:hover { background: var(--earth-bright) !important; color: white !important; }
-
+[data-testid="stMetric"] { background: white; border-radius: 12px; padding: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,0.08); }
+[data-testid="stMetricValue"] { font-family: 'Playfair Display', serif !important; font-size: 1.5rem !important; color: #0D2B0F !important; }
+[data-testid="stMetricLabel"] { font-size: 0.73rem !important; text-transform: uppercase !important; letter-spacing: 0.08em !important; color: #888 !important; }
+[data-testid="stDownloadButton"] > button { background: white !important; color: #2E7D32 !important; border: 2px solid #2E7D32 !important; border-radius: 12px !important; font-weight: 600 !important; box-shadow: none !important; }
+[data-testid="stDownloadButton"] > button:hover { background: #2E7D32 !important; color: white !important; }
 hr { border-color: rgba(46,125,50,0.12) !important; margin: 1.2rem 0 !important; }
+.app-footer { text-align:center; padding: 1.5rem 0 0.5rem; color: #888; font-size: 0.76rem; border-top: 1px solid rgba(46,125,50,0.1); margin-top: 2rem; }
+.app-footer strong { color: #2E7D32; }
+`;
 
-.app-footer { text-align:center; padding: 1.5rem 0 0.5rem; color: var(--text-light); font-size: 0.76rem; border-top: 1px solid rgba(46,125,50,0.1); margin-top: 2rem; }
-.app-footer strong { color: var(--earth-bright); }
-</style>
-""", unsafe_allow_html=True)
+const style = window.parent.document.createElement('style');
+style.innerHTML = css;
+window.parent.document.head.appendChild(style);
+</script>
+""", height=0)
 
 # ── AUTHENTICATION ──
 config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
@@ -224,10 +281,9 @@ elif auth_status == True:
         st.divider()
 
         st.markdown("""
-        <div style="background:rgba(76,175,80,0.18);
-                    border:1px solid rgba(76,175,80,0.35);
-                    border-radius:9px;padding:0.6rem 0.9rem;
-                    font-size:0.8rem;color:white;margin-bottom:0.8rem;">
+        <div style="background:rgba(76,175,80,0.18);border:1px solid rgba(76,175,80,0.35);
+                    border-radius:9px;padding:0.6rem 0.9rem;font-size:0.8rem;
+                    color:white;margin-bottom:0.8rem;">
             <span style="color:#8BC34A;">●</span> All systems operational
         </div>
         """, unsafe_allow_html=True)
