@@ -148,6 +148,8 @@ def ussd_callback():
     # 3. Final Response Construction
     res = make_response(response, 200)
     res.headers["Content-Type"] = "text/plain"
+    # This header tells Ngrok to skip the warning page
+    res.headers["ngrok-skip-browser-warning"] = "true" 
     return res
 
 if __name__ == '__main__':
