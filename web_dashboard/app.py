@@ -6,9 +6,6 @@ from yaml.loader import SafeLoader
 import streamlit_authenticator as stauth
 import os
 
-# ─────────────────────────────────────────────
-# 0. PAGE CONFIG — must be FIRST Streamlit call
-# ─────────────────────────────────────────────
 st.set_page_config(
     page_title="Agritex Maize AI",
     page_icon="🌿",
@@ -16,14 +13,9 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ─────────────────────────────────────────────
-# 1. GLOBAL CSS
-# ─────────────────────────────────────────────
 st.markdown("""
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
-
-/* ── PALETTE ── */
 :root {
     --earth-dark:   #0D2B0F;
     --earth-bright: #2E7D32;
@@ -37,24 +29,16 @@ st.markdown("""
     --shadow:       0 4px 24px rgba(0,0,0,0.08);
     --radius:       16px;
 }
-
-/* ── BASE ── */
 .stApp { background: var(--cream); font-family: 'DM Sans', sans-serif; }
 #MainMenu, footer { visibility: hidden; }
 .block-container { padding: 2rem 2.5rem 3rem !important; max-width: 1400px; }
 
-/* ── SIDEBAR BACKGROUND ──
-   Only style the background here. All content uses
-   native st.* calls so Streamlit's collapse works correctly. */
 section[data-testid="stSidebar"] {
     background: linear-gradient(175deg, #0D2B0F 0%, #1B5E20 60%, #2E7D32 100%) !important;
 }
-/* Inner padding container */
 section[data-testid="stSidebar"] > div:first-child {
     padding: 1rem 1rem 2rem !important;
 }
-
-/* ── ALL SIDEBAR TEXT → WHITE ── */
 section[data-testid="stSidebar"] p,
 section[data-testid="stSidebar"] span,
 section[data-testid="stSidebar"] label,
@@ -67,8 +51,6 @@ section[data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p {
     color: white !important;
     font-family: 'DM Sans', sans-serif !important;
 }
-
-/* ── SIDEBAR SELECTBOX ── */
 section[data-testid="stSidebar"] .stSelectbox > div > div {
     background: rgba(255,255,255,0.12) !important;
     border: 1px solid rgba(255,255,255,0.3) !important;
@@ -83,8 +65,6 @@ section[data-testid="stSidebar"] .stSelectbox label p {
     letter-spacing: 0.08em !important;
     text-transform: uppercase !important;
 }
-
-/* ── SIDEBAR BUTTON (Logout) ── */
 section[data-testid="stSidebar"] .stButton > button {
     background: rgba(255,255,255,0.12) !important;
     color: white !important;
@@ -98,14 +78,10 @@ section[data-testid="stSidebar"] .stButton > button {
 section[data-testid="stSidebar"] .stButton > button:hover {
     background: rgba(255,255,255,0.22) !important;
 }
-
-/* ── SIDEBAR DIVIDER ── */
 section[data-testid="stSidebar"] hr {
     border-color: rgba(255,255,255,0.2) !important;
     margin: 0.6rem 0 !important;
 }
-
-/* ── SIDEBAR COLLAPSE TOGGLE — always visible ── */
 [data-testid="collapsedControl"] {
     display: flex !important;
     visibility: visible !important;
@@ -113,102 +89,46 @@ section[data-testid="stSidebar"] hr {
     border-radius: 0 8px 8px 0 !important;
     box-shadow: 2px 0 8px rgba(0,0,0,0.25) !important;
 }
-[data-testid="collapsedControl"] svg {
-    fill: white !important;
-    stroke: white !important;
-}
+[data-testid="collapsedControl"] svg { fill: white !important; stroke: white !important; }
 
-/* ── PAGE HEADER ── */
-.page-header { margin-bottom: 1.8rem; padding-bottom: 1.2rem;
-               border-bottom: 2px solid rgba(46,125,50,0.15); }
-.page-title  { font-family: 'Playfair Display', serif; font-size: 2rem;
-               font-weight: 900; color: var(--earth-dark); margin: 0; }
+.page-header { margin-bottom: 1.8rem; padding-bottom: 1.2rem; border-bottom: 2px solid rgba(46,125,50,0.15); }
+.page-title  { font-family: 'Playfair Display', serif; font-size: 2rem; font-weight: 900; color: var(--earth-dark); margin: 0; }
 .page-sub    { font-size: 0.88rem; color: var(--text-light); margin-top: 0.25rem; }
-.live-badge  { display: inline-flex; align-items: center; gap: 6px;
-               background: #E8F5E9; border: 1px solid #A5D6A7;
-               color: var(--earth-bright); font-size: 0.73rem; font-weight: 600;
-               padding: 5px 13px; border-radius: 999px; margin-top: 0.6rem; }
-.live-dot    { width: 7px; height: 7px; background: var(--leaf);
-               border-radius: 50%; animation: pulse 1.8s infinite; }
-@keyframes pulse {
-    0%,100% { opacity:1; transform:scale(1); }
-    50%     { opacity:0.4; transform:scale(1.5); }
-}
+.live-badge  { display: inline-flex; align-items: center; gap: 6px; background: #E8F5E9; border: 1px solid #A5D6A7; color: var(--earth-bright); font-size: 0.73rem; font-weight: 600; padding: 5px 13px; border-radius: 999px; margin-top: 0.6rem; }
+.live-dot    { width: 7px; height: 7px; background: var(--leaf); border-radius: 50%; animation: pulse 1.8s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.4; transform:scale(1.5); } }
 
-/* ── KPI CARDS ── */
-.kpi-card {
-    background: white; border-radius: var(--radius);
-    padding: 1.3rem 1.5rem; box-shadow: var(--shadow);
-    border-left: 4px solid var(--leaf);
-    transition: transform 0.2s, box-shadow 0.2s;
-}
+.kpi-card { background: white; border-radius: var(--radius); padding: 1.3rem 1.5rem; box-shadow: var(--shadow); border-left: 4px solid var(--leaf); transition: transform 0.2s, box-shadow 0.2s; }
 .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(0,0,0,0.12); }
-.kpi-card.gold   { border-left-color: var(--gold); }
-.kpi-card.soil   { border-left-color: var(--soil); }
-.kpi-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em;
-             color: var(--text-light); font-weight: 600; margin-bottom: 0.4rem; }
-.kpi-value { font-family: 'Playfair Display', serif; font-size: 1.9rem;
-             font-weight: 700; color: var(--earth-dark); line-height: 1.1; }
-.kpi-delta     { font-size: 0.78rem; color: var(--leaf); font-weight: 600; margin-top: 0.25rem; }
+.kpi-card.gold { border-left-color: var(--gold); }
+.kpi-card.soil { border-left-color: var(--soil); }
+.kpi-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-light); font-weight: 600; margin-bottom: 0.4rem; }
+.kpi-value { font-family: 'Playfair Display', serif; font-size: 1.9rem; font-weight: 700; color: var(--earth-dark); line-height: 1.1; }
+.kpi-delta { font-size: 0.78rem; color: var(--leaf); font-weight: 600; margin-top: 0.25rem; }
 .kpi-delta.neg { color: var(--danger); }
 
-/* ── SECTION TITLE ── */
-.section-title { font-family: 'Playfair Display', serif; font-size: 1.05rem;
-                 font-weight: 700; color: var(--earth-dark); margin-bottom: 0.8rem; }
+.section-title { font-family: 'Playfair Display', serif; font-size: 1.05rem; font-weight: 700; color: var(--earth-dark); margin-bottom: 0.8rem; }
 
-/* ── MAIN CONTENT BUTTONS ── */
-.stButton > button {
-    background: linear-gradient(135deg, #2E7D32, #4CAF50) !important;
-    color: white !important; border: none !important;
-    border-radius: 12px !important; font-weight: 600 !important;
-    font-family: 'DM Sans', sans-serif !important;
-    box-shadow: 0 4px 12px rgba(46,125,50,0.3) !important;
-    transition: all 0.2s !important;
-}
-.stButton > button:hover { transform: translateY(-2px) !important;
-    box-shadow: 0 8px 20px rgba(46,125,50,0.4) !important; }
+.stButton > button { background: linear-gradient(135deg, #2E7D32, #4CAF50) !important; color: white !important; border: none !important; border-radius: 12px !important; font-weight: 600 !important; font-family: 'DM Sans', sans-serif !important; box-shadow: 0 4px 12px rgba(46,125,50,0.3) !important; transition: all 0.2s !important; }
+.stButton > button:hover { transform: translateY(-2px) !important; box-shadow: 0 8px 20px rgba(46,125,50,0.4) !important; }
 
-/* ── FILE UPLOADER ── */
-[data-testid="stFileUploader"] {
-    background: #F8FBF8 !important;
-    border: 2px dashed #A5D6A7 !important;
-    border-radius: 14px !important;
-}
+[data-testid="stFileUploader"] { background: #F8FBF8 !important; border: 2px dashed #A5D6A7 !important; border-radius: 14px !important; }
 
-/* ── METRICS ── */
-[data-testid="stMetric"] { background: white; border-radius: 12px;
-                            padding: 1rem; box-shadow: var(--shadow); }
-[data-testid="stMetricValue"] { font-family:'Playfair Display',serif !important;
-                                 font-size: 1.5rem !important; color: var(--earth-dark) !important; }
-[data-testid="stMetricLabel"] { font-size: 0.73rem !important; text-transform: uppercase !important;
-                                 letter-spacing: 0.08em !important; color: var(--text-light) !important; }
+[data-testid="stMetric"] { background: white; border-radius: 12px; padding: 1rem; box-shadow: var(--shadow); }
+[data-testid="stMetricValue"] { font-family:'Playfair Display',serif !important; font-size: 1.5rem !important; color: var(--earth-dark) !important; }
+[data-testid="stMetricLabel"] { font-size: 0.73rem !important; text-transform: uppercase !important; letter-spacing: 0.08em !important; color: var(--text-light) !important; }
 
-/* ── DOWNLOAD BUTTON ── */
-[data-testid="stDownloadButton"] > button {
-    background: white !important; color: var(--earth-bright) !important;
-    border: 2px solid var(--earth-bright) !important;
-    border-radius: 12px !important; font-weight: 600 !important;
-    box-shadow: none !important;
-}
-[data-testid="stDownloadButton"] > button:hover {
-    background: var(--earth-bright) !important; color: white !important;
-}
+[data-testid="stDownloadButton"] > button { background: white !important; color: var(--earth-bright) !important; border: 2px solid var(--earth-bright) !important; border-radius: 12px !important; font-weight: 600 !important; box-shadow: none !important; }
+[data-testid="stDownloadButton"] > button:hover { background: var(--earth-bright) !important; color: white !important; }
 
-/* ── DIVIDER ── */
 hr { border-color: rgba(46,125,50,0.12) !important; margin: 1.2rem 0 !important; }
 
-/* ── FOOTER ── */
-.app-footer { text-align:center; padding: 1.5rem 0 0.5rem;
-              color: var(--text-light); font-size: 0.76rem;
-              border-top: 1px solid rgba(46,125,50,0.1); margin-top: 2rem; }
+.app-footer { text-align:center; padding: 1.5rem 0 0.5rem; color: var(--text-light); font-size: 0.76rem; border-top: 1px solid rgba(46,125,50,0.1); margin-top: 2rem; }
 .app-footer strong { color: var(--earth-bright); }
 </style>
 """, unsafe_allow_html=True)
 
-
-# ─────────────────────────────────────────────
-# 2. AUTHENTICATION
-# ─────────────────────────────────────────────
+# ── AUTHENTICATION ──
 config_path = os.path.join(os.path.dirname(__file__), 'config.yaml')
 with open(config_path) as f:
     config = yaml.load(f, Loader=SafeLoader)
@@ -228,10 +148,7 @@ except Exception:
 auth_status  = st.session_state.get('authentication_status')
 current_user = st.session_state.get('name', 'Officer')
 
-
-# ─────────────────────────────────────────────
-# 3. LOGIN / ERROR STATE
-# ─────────────────────────────────────────────
+# ── LOGIN HERO ──
 def login_hero():
     st.markdown("""
     <div style="max-width:440px;margin:3rem auto;text-align:center;
@@ -262,57 +179,37 @@ elif auth_status is None:
     login_hero()
     st.info("👋 Welcome! Enter your credentials above to continue.")
 
-
-# ─────────────────────────────────────────────
-# 4. MAIN DASHBOARD
-# ─────────────────────────────────────────────
 elif auth_status == True:
     BACKEND_URL = "http://127.0.0.1:5000"
 
-    # ── SIDEBAR ──────────────────────────────
-    # KEY FIX: Everything in ONE with st.sidebar block.
-    # Never mix st.sidebar.X() calls outside this block —
-    # that splits the context and breaks collapse behaviour.
+    # ── SIDEBAR — single with block ──
     with st.sidebar:
-
-        # Brand header
         st.markdown(f"""
-        <div style="text-align:center; padding:1.2rem 0.5rem 1rem;
+        <div style="text-align:center;padding:1.2rem 0.5rem 1rem;
                     border-bottom:1px solid rgba(255,255,255,0.15);
                     margin-bottom:1rem;">
-            <div style="font-size:2.6rem; line-height:1;">🌿</div>
-            <div style="font-family:'Playfair Display',serif; font-size:1.45rem;
-                        font-weight:900; color:white; margin-top:0.4rem;
-                        letter-spacing:0.03em;">
+            <div style="font-size:2.6rem;line-height:1;">🌿</div>
+            <div style="font-family:'Playfair Display',serif;font-size:1.45rem;
+                        font-weight:900;color:white;margin-top:0.4rem;">
                 AGRITEX AI
             </div>
-            <div style="font-size:0.66rem; color:rgba(255,255,255,0.5);
-                        text-transform:uppercase; letter-spacing:0.18em;
+            <div style="font-size:0.66rem;color:rgba(255,255,255,0.5);
+                        text-transform:uppercase;letter-spacing:0.18em;
                         margin-top:0.2rem;">
                 Digital Support Unit
             </div>
         </div>
-        """, unsafe_allow_html=True)
-
-        # Logged-in user pill
-        st.markdown(f"""
         <div style="background:rgba(255,255,255,0.1);
                     border:1px solid rgba(255,255,255,0.18);
-                    border-radius:10px; padding:0.6rem 0.9rem;
+                    border-radius:10px;padding:0.6rem 0.9rem;
                     margin-bottom:1.2rem;">
             <div style="font-size:0.62rem;text-transform:uppercase;
                         letter-spacing:0.1em;color:rgba(255,255,255,0.45);
-                        margin-bottom:0.2rem;">
-                Logged in as
-            </div>
+                        margin-bottom:0.2rem;">Logged in as</div>
             <div style="font-weight:600;color:white;font-size:0.9rem;">
                 👤 {current_user}
             </div>
         </div>
-        """, unsafe_allow_html=True)
-
-        # Field context label
-        st.markdown("""
         <div style="font-size:0.62rem;font-weight:700;text-transform:uppercase;
                     letter-spacing:0.14em;color:rgba(255,255,255,0.4);
                     margin-bottom:0.4rem;">
@@ -320,28 +217,23 @@ elif auth_status == True:
         </div>
         """, unsafe_allow_html=True)
 
-        # Native Streamlit widgets — these drive collapse correctly
         district = st.selectbox("District", ["Umzingwane", "Mazabuka", "Chirundu", "Guruve"])
         ward     = st.selectbox("Ward", [f"Ward {i}" for i in range(1, 21)])
         variety  = st.selectbox("Maize Variety", ["SC 301", "SC 529", "Pioneer Hybrid"])
 
         st.divider()
 
-        # System status badge
         st.markdown("""
         <div style="background:rgba(76,175,80,0.18);
                     border:1px solid rgba(76,175,80,0.35);
                     border-radius:9px;padding:0.6rem 0.9rem;
                     font-size:0.8rem;color:white;margin-bottom:0.8rem;">
-            <span style="color:#8BC34A;font-size:0.9rem;">●</span>
-            &nbsp;All systems operational
+            <span style="color:#8BC34A;">●</span> All systems operational
         </div>
         """, unsafe_allow_html=True)
 
-        # Logout button — native widget, stays in same block
         authenticator.logout("🚪  Logout", "sidebar")
 
-        # Version footer
         st.markdown("""
         <div style="text-align:center;padding-top:1.5rem;">
             <div style="font-size:0.6rem;color:rgba(255,255,255,0.22);
@@ -351,18 +243,16 @@ elif auth_status == True:
         </div>
         """, unsafe_allow_html=True)
 
-    # ── PAGE HEADER ──────────────────────────
+    # ── PAGE HEADER ──
     st.markdown(f"""
     <div class="page-header">
         <div class="page-title">🌾 Maize Intelligence Dashboard</div>
         <div class="page-sub">Strategic overview · {district} — {ward}</div>
-        <div class="live-badge">
-            <div class="live-dot"></div>&nbsp;LIVE SYSTEM
-        </div>
+        <div class="live-badge"><div class="live-dot"></div>&nbsp;LIVE SYSTEM</div>
     </div>
     """, unsafe_allow_html=True)
 
-    # ── KPI ROW ──────────────────────────────
+    # ── KPI ROW ──
     k1, k2, k3, k4 = st.columns(4)
     with k1:
         st.markdown("""<div class="kpi-card">
@@ -391,15 +281,13 @@ elif auth_status == True:
 
     st.markdown("<div style='margin-top:1.5rem'></div>", unsafe_allow_html=True)
 
-    # ── ROW 2: MAP + FORECAST ────────────────
+    # ── MAP + FORECAST ──
     col_map, col_forecast = st.columns([1.5, 1], gap="medium")
 
     with col_map:
-        st.markdown('<div class="section-title">📍 Live Field Intelligence Map</div>',
-                    unsafe_allow_html=True)
+        st.markdown('<div class="section-title">📍 Live Field Intelligence Map</div>', unsafe_allow_html=True)
         try:
-            r = requests.get(f"{BACKEND_URL}/get_trends",
-                             params={"district": district}, timeout=3)
+            r = requests.get(f"{BACKEND_URL}/get_trends", params={"district": district}, timeout=3)
             if r.status_code == 200:
                 raw = r.json().get("data", [])
                 if raw:
@@ -413,8 +301,7 @@ elif auth_status == True:
             st.warning("⚠️ Map offline — ensure Flask is running on port 5000.")
 
     with col_forecast:
-        st.markdown('<div class="section-title">🔮 AI Decision Support</div>',
-                    unsafe_allow_html=True)
+        st.markdown('<div class="section-title">🔮 AI Decision Support</div>', unsafe_allow_html=True)
         if st.button("⚡ Generate Localized Forecast", use_container_width=True):
             with st.spinner("Consulting AI Engine..."):
                 try:
@@ -448,10 +335,8 @@ elif auth_status == True:
 
     st.divider()
 
-    # ── ROW 3: CSV UPLOAD + DIAGNOSTICS ─────
-    st.markdown('<div class="section-title">📂 Field Log Analysis & Soil Diagnostics</div>',
-                unsafe_allow_html=True)
-
+    # ── CSV UPLOAD + DIAGNOSTICS ──
+    st.markdown('<div class="section-title">📂 Field Log Analysis & Soil Diagnostics</div>', unsafe_allow_html=True)
     up_col, diag_col = st.columns([1, 2], gap="medium")
 
     with up_col:
@@ -465,14 +350,12 @@ elif auth_status == True:
             file_name="field_log_template.csv", mime="text/csv",
             use_container_width=True
         )
-
         df_preview = None
         if uploaded_file:
             uploaded_file.seek(0)
             df_preview = pd.read_csv(uploaded_file)
             st.caption("Preview")
             st.dataframe(df_preview.head(3), use_container_width=True, hide_index=True)
-
             if st.button("🔬 Run Smart Diagnostic", use_container_width=True):
                 with st.spinner("Analyzing against district benchmarks..."):
                     try:
@@ -528,7 +411,6 @@ elif auth_status == True:
                 st.line_chart(df_preview['Soil_Moisture'], use_container_width=True, color="#2E7D32")
 
             st.divider()
-
             alerts = result.get("alerts", [])
             report = f"""==========================================
 AGRITEX MAIZE ADVISORY REPORT
@@ -554,7 +436,6 @@ Zimbabwe Digital Support Unit © 2026
                                file_name=f"Advice_{ward}_{pd.Timestamp.now().strftime('%d%m%Y')}.txt",
                                mime="text/plain", use_container_width=True)
             st.info("💡 Share this report via WhatsApp or print for the farmer.")
-
         else:
             st.markdown("""
             <div style="text-align:center;padding:3rem 2rem;background:#FAFAFA;
@@ -568,10 +449,9 @@ Zimbabwe Digital Support Unit © 2026
                 </div>
             </div>""", unsafe_allow_html=True)
 
-    # ── ROW 4: REGIONAL TRENDS ───────────────
+    # ── REGIONAL TRENDS ──
     st.divider()
-    st.markdown('<div class="section-title">📊 Live Regional Performance Trends</div>',
-                unsafe_allow_html=True)
+    st.markdown('<div class="section-title">📊 Live Regional Performance Trends</div>', unsafe_allow_html=True)
 
     @st.cache_data(ttl=30)
     def fetch_trends(d):
@@ -608,7 +488,7 @@ Zimbabwe Digital Support Unit © 2026
     except Exception as e:
         st.warning(f"Could not load regional trends: {e}")
 
-    # ── FOOTER ───────────────────────────────
+    # ── FOOTER ──
     st.markdown(f"""
     <div class="app-footer">
         <strong>Zimbabwe Agritex Digital Intelligence System</strong>
