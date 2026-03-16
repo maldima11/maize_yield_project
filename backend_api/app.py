@@ -179,6 +179,6 @@ def ussd_callback():
     return res
 
 
-if __name__ == '__main__':
-    # host='0.0.0.0' is the key here!
-    app.run(debug=True, port=5000, host='0.0.0.0')
+# Replace the last line with:
+debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
+app.run(debug=debug_mode, port=5000, host='0.0.0.0')
