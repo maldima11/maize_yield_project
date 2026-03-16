@@ -48,11 +48,11 @@ cd "$DASHBOARD_DIR"
 STREAMLIT_PID=$!
 echo "✅ Streamlit Dashboard running (PID: $STREAMLIT_PID)"
 
-# 3. Start Serveo Tunnel with keepalive
-echo "🌐 Starting Serveo tunnel..."
-ssh -o ServerAliveInterval=60 -R 80:localhost:5000 serveo.net &
-SERVEO_PID=$!
-echo "✅ Serveo tunnel started (PID: $SERVEO_PID)"
+# Start ngrok tunnel
+echo "🌐 Starting ngrok tunnel..."
+ngrok http 5000 &
+NGROK_PID=$!
+echo "✅ ngrok started - check http://127.0.0.1:4040 for your public URL"
 
 echo ""
 echo "=============================================="
@@ -72,6 +72,7 @@ cleanup() {
     echo "🛑 Stopping all services..."
     kill $BACKEND_PID $STREAMLIT_PID $SERVEO_PID 2>/dev/null
     wait $BACKEND_PID $STREAMLIT_PID $SERVEO_PID 2>/dev/null
+    kill $BACKEND_PID $STREAMLIT_PID $NGROK_PID 2>/dev/null
     echo "✅ All services stopped."
     exit 0
 }
