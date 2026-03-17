@@ -357,7 +357,7 @@ elif auth_status == True:
             st.warning("⚠️ Map offline — ensure Flask is running on port 5000.")
 
     with col_forecast:
-        st.markdown('<div class="section-title">🔮 AI Decision Support</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-title">AI Decision Support</div>', unsafe_allow_html=True)
         if st.button("⚡ Generate Localized Forecast", use_container_width=True):
             with st.spinner("Consulting AI Engine..."):
                 try:
