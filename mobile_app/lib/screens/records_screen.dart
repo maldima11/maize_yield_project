@@ -264,7 +264,7 @@ class _RecordCard extends StatelessWidget {
 
           const SizedBox(height: 8),
           Text(
-            'Logged: $formatted  ·  Officer: ${record.officerName}',
+            'Logged: $formatted  ·  Farmer: ${record.officerName}',
             style: const TextStyle(fontSize: 11, color: Color(0xFF888888)),
           ),
 

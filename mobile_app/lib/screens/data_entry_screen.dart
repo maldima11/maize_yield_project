@@ -17,7 +17,7 @@ class _DataEntryScreenState extends State<DataEntryScreen> {
   bool _isLocating = false;
   bool _isSaving   = false;
 
-  final _officerCtrl    = TextEditingController();
+  final _farmerCtrl    = TextEditingController();
   final _wardCtrl       = TextEditingController();
   final _moistureCtrl   = TextEditingController();
   final _phCtrl         = TextEditingController();
@@ -36,7 +36,7 @@ class _DataEntryScreenState extends State<DataEntryScreen> {
 
   @override
   void dispose() {
-    _officerCtrl.dispose();
+    _farmerCtrl.dispose();
     _wardCtrl.dispose();
     _moistureCtrl.dispose();
     _phCtrl.dispose();
@@ -121,7 +121,7 @@ class _DataEntryScreenState extends State<DataEntryScreen> {
     setState(() => _isSaving = true);
 
     final record = FieldRecord(
-      officerName: _officerCtrl.text.trim(),
+      farmerName: _farmerCtrl.text.trim(),
       district: _selectedDistrict,
       ward: _wardCtrl.text.trim(),
       variety: _selectedVariety,
@@ -163,7 +163,7 @@ class _DataEntryScreenState extends State<DataEntryScreen> {
 
   void _resetForm() {
     _formKey.currentState?.reset();
-    for (final c in [_officerCtrl, _wardCtrl, _moistureCtrl,
+    for (final c in [_farmerCtrl, _wardCtrl, _moistureCtrl,
                      _phCtrl, _fertilizerCtrl, _notesCtrl]) {
       c.clear();
     }
@@ -224,8 +224,8 @@ class _DataEntryScreenState extends State<DataEntryScreen> {
                 ),
               ],
 
-              _SectionHeader('👤 Officer Details'),
-              _buildTextField(_officerCtrl, 'Officer Name', Icons.person_outline),
+              _SectionHeader('👤 Farmer Details'),
+              _buildTextField(_farmerCtrl, 'Farmer Name', Icons.person_outline),
               const SizedBox(height: 12),
 
               _SectionHeader('📍 Location'),

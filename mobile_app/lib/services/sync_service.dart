@@ -22,7 +22,7 @@ class SyncService {
         Uri.parse('$_baseUrl/sync_field_record'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
-          'officer_name': record.officerName,
+          'farmer_name': record.farmerName,
           'district': record.district,
           'ward': record.ward,
           'variety': record.variety,

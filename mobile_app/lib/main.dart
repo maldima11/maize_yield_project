@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // kIsWeb
+import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:workmanager/workmanager.dart';
 import 'screens/home_screen.dart';
@@ -7,7 +7,7 @@ import 'screens/data_entry_screen.dart';
 import 'screens/records_screen.dart';
 import 'services/sync_service.dart';
 
-// Background task dispatcher — mobile only
+// Background task dispatcher — Android only
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
@@ -18,11 +18,16 @@ void callbackDispatcher() {
   });
 }
 
+// WorkManager only supports Android — iOS uses connectivity listener instead
+bool get _isAndroid =>
+    !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // WorkManager is mobile-only — skip on web
-  if (!kIsWeb) {
+  // Only register WorkManager on Android
+  // On iOS, background sync is triggered by the connectivity listener in HomeScreen
+  if (_isAndroid) {
     await Workmanager().initialize(callbackDispatcher, isInDebugMode: false);
     await Workmanager().registerPeriodicTask(
       'agritex-bg-sync',

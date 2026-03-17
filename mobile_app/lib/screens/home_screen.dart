@@ -110,7 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Good day, Officer 👋',
+                      'Good day, Farmer 👋',
                       style: GoogleFonts.playfairDisplay(
                         fontSize: 20,
                         fontWeight: FontWeight.w700,
