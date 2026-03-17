@@ -1,48 +1,9 @@
-# All dependencies — sqflite, geolocator, http, workmanager, connectivity_plus
-
-name: agritex_mobile
-description: Agritex Maize AI - Extension Officer Mobile App
-publish_to: 'none'
-version: 1.0.0+1
-
-environment:
-  sdk: '>=3.0.0 <4.0.0'
-
 dependencies:
   flutter:
     sdk: flutter
-
-  # Local SQLite database for offline storage
-  sqflite: ^2.3.0
-
-  # Get the local database file path
-  path: ^1.8.3
-  path_provider: ^2.1.1
-
-  # HTTP requests to Flask API
-  http: ^1.1.0
-
-  # Connectivity detection (Wi-Fi / mobile data)
-  connectivity_plus: ^5.0.2
-
-  # GPS coordinates
-  geolocator: ^11.0.0
-
-  # Background sync task scheduling
-  workmanager: ^0.5.2
-
-  # Shared preferences for simple key-value storage
-  shared_preferences: ^2.2.2
-
-  # UI
-  cupertino_icons: ^1.0.6
-  google_fonts: ^6.1.0
-  intl: ^0.18.1
-
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^3.0.0
-
-flutter:
-  uses-material-design: true
+  sqflite: ^2.3.0          # Local database
+  path: ^1.9.0             # Path helper
+  geolocator: ^11.0.0      # GPS access
+  http: ^1.2.0             # Send data to Flask
+  connectivity_plus: ^6.0.0 # Detect Wi-Fi/Mobile data
+  workmanager: ^0.5.2      # Background task management
