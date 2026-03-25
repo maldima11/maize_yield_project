@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../models/report_model.dart';
 
 class DBHelper {
   static Database? _db;
@@ -11,26 +12,27 @@ class DBHelper {
   }
 
   initDb() async {
-    String path = join(await getDatabasesPath(), "agritex.db");
+    String path = join(await getDatabasesPath(), "agritex_v1.db");
     return await openDatabase(path, version: 1, onCreate: (db, version) {
       return db.execute(
-        "CREATE TABLE logs(id INTEGER PRIMARY KEY, district TEXT, ward TEXT, variety TEXT, lat REAL, lon REAL, synced INTEGER DEFAULT 0)"
+        "CREATE TABLE reports(id INTEGER PRIMARY KEY AUTOINCREMENT, district TEXT, ward TEXT, variety TEXT, lat REAL, lon REAL, synced INTEGER DEFAULT 0)"
       );
     });
   }
 
-  Future<void> insertLog(Map<String, dynamic> data) async {
+  Future<int> insertReport(ReportModel report) async {
     final dbClient = await db;
-    await dbClient.insert('logs', data);
+    return await dbClient.insert('reports', report.toMap());
   }
 
-  Future<List<Map<String, dynamic>>> getUnsyncedLogs() async {
+  Future<List<ReportModel>> getUnsyncedReports() async {
     final dbClient = await db;
-    return await dbClient.query('logs', where: "synced = 0");
+    final List<Map<String, dynamic>> maps = await dbClient.query('reports', where: "synced = 0");
+    return List.generate(maps.length, (i) => ReportModel.fromMap(maps[i]));
   }
 
   Future<void> markAsSynced(int id) async {
     final dbClient = await db;
-    await dbClient.update('logs', {'synced': 1}, where: "id = ?", whereArgs: [id]);
+    await dbClient.update('reports', {'synced': 1}, where: "id = ?", whereArgs: [id]);
   }
 }
