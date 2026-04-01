@@ -1,0 +1,3 @@
+CON Welcome to Agritex AI
+1. Start Yield Forecast
+2. Check System Health

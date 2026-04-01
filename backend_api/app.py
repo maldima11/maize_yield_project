@@ -18,16 +18,17 @@ CORS(app,
      methods=["GET", "POST", "OPTIONS"],
      supports_credentials=False)
 
-# ── CRITICAL: after_request must NEVER override Content-Type for USSD ────────
+# ── FIX: Skip CORS headers entirely for /ussd — AT rejects extra headers ─────
 @app.after_request
 def add_cors_headers(response):
+    if request.path == '/ussd':
+        return response  # Return as-is — AT needs clean text/plain only
     response.headers["Access-Control-Allow-Origin"]  = "*"
     response.headers["Access-Control-Allow-Headers"] = (
         "Content-Type, Authorization, ngrok-skip-browser-warning"
     )
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     response.headers["ngrok-skip-browser-warning"]   = "true"
-    # Never touch Content-Type here — USSD needs text/plain set in its own route
     return response
 
 # ── OPTIONS preflight handler ─────────────────────────────────────────────────
@@ -222,14 +223,14 @@ def sync_field_record():
 # Africa's Talking requirements:
 #   1. Response body must start with CON (continue) or END (terminate)
 #   2. Content-Type must be exactly text/plain
-#   3. No extra headers that could confuse the AT gateway
+#   3. NO extra headers — AT gateway rejects responses with CORS or other headers
 @app.route('/ussd', methods=['POST', 'GET'])
 def ussd_callback():
     text         = request.values.get("text", "")
     session_id   = request.values.get("sessionId", "")
     phone_number = request.values.get("phoneNumber", "")
 
-    # Log every request so we can see AT reaching Flask
+    # Log every request so we can confirm AT is reaching Flask
     print(f"USSD | session={session_id} | phone={phone_number} | text='{text}'")
 
     input_levels = text.split("*") if text else []
@@ -266,10 +267,9 @@ def ussd_callback():
     else:
         response_text = "END Invalid entry. Please restart."
 
-    # Build response with ONLY what AT needs — nothing extra
+    # Return ONLY what AT needs — no CORS, no ngrok headers, nothing extra
     res = make_response(response_text, 200)
     res.headers["Content-Type"] = "text/plain"
-    res.headers["Cache-Control"] = "no-cache"
     return res
 
 
