@@ -237,7 +237,7 @@ elif auth_status is None:
     st.info("👋 Welcome! Enter your credentials above to continue.")
 
 elif auth_status == True:
-    BACKEND_URL = "http://127.0.0.1:5000"
+    BACKEND_URL = "http://127.0.0.1:5001"
 
     # ── SIDEBAR — single with block ──
     with st.sidebar:
