@@ -11,17 +11,14 @@ import pandas as pd
 from database import init_db, save_report, get_regional_summary
 
 app = Flask(__name__)
-
-# FIX #1: Fully open CORS — allow all origins, methods, and headers
 CORS(app,
      resources={r"/*": {"origins": "*"}},
      allow_headers=["Content-Type", "Authorization",
-                    "Access-Control-Allow-Origin",
                     "ngrok-skip-browser-warning"],
      methods=["GET", "POST", "OPTIONS"],
      supports_credentials=False)
 
-# FIX #2: Handle OPTIONS preflight requests for ALL routes
+# ── CRITICAL: after_request must NEVER override Content-Type for USSD ────────
 @app.after_request
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"]  = "*"
@@ -29,21 +26,21 @@ def add_cors_headers(response):
         "Content-Type, Authorization, ngrok-skip-browser-warning"
     )
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    # FIX #3: Add ngrok bypass header to EVERY response
     response.headers["ngrok-skip-browser-warning"]   = "true"
+    # Never touch Content-Type here — USSD needs text/plain set in its own route
     return response
 
+# ── OPTIONS preflight handler ─────────────────────────────────────────────────
 @app.route('/', defaults={'path': ''}, methods=['OPTIONS'])
 @app.route('/<path:path>', methods=['OPTIONS'])
 def handle_options(path):
-    """Handle all CORS preflight OPTIONS requests."""
-    response = make_response('', 204)
-    response.headers["Access-Control-Allow-Origin"]  = "*"
-    response.headers["Access-Control-Allow-Headers"] = (
+    res = make_response('', 204)
+    res.headers["Access-Control-Allow-Origin"]  = "*"
+    res.headers["Access-Control-Allow-Headers"] = (
         "Content-Type, Authorization, ngrok-skip-browser-warning"
     )
-    response.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-    return response
+    res.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
+    return res
 
 # --- DATABASE INITIALIZATION ---
 init_db()
@@ -77,13 +74,11 @@ def home():
     })
 
 
-# --- 404 HANDLER ---
+# --- ERROR HANDLERS ---
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({"status": "error", "message": "Endpoint not found"}), 404
 
-
-# --- 500 HANDLER ---
 @app.errorhandler(500)
 def server_error(e):
     return jsonify({"status": "error", "message": "Internal server error"}), 500
@@ -180,18 +175,17 @@ def predict():
         "district":              district,
         "ward":                  ward,
         "predicted_yield_kg_ha": 1450.5,
-        "recommendation":        (
+        "recommendation": (
             f"Your {variety} in {district} ({ward}) is at V6 stage. "
             "Apply top-dressing fertilizer now for optimal yield."
         ),
-        "interactive_status":    "Optimal"
+        "interactive_status": "Optimal"
     })
 
 
 # --- MOBILE SYNC ENDPOINT ---
 @app.route('/sync_field_record', methods=['POST'])
 def sync_field_record():
-    """Receives field records synced from the Flutter mobile app."""
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"status": "error", "message": "No JSON received"}), 400
@@ -224,32 +218,38 @@ def sync_field_record():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-# --- USSD ENDPOINT ---
-# FIX #4: USSD must return plain text with correct headers — no JSON, no HTML
+# --- USSD ENDPOINT ────────────────────────────────────────────────────────────
+# Africa's Talking requirements:
+#   1. Response body must start with CON (continue) or END (terminate)
+#   2. Content-Type must be exactly text/plain
+#   3. No extra headers that could confuse the AT gateway
 @app.route('/ussd', methods=['POST', 'GET'])
 def ussd_callback():
     text         = request.values.get("text", "")
     session_id   = request.values.get("sessionId", "")
     phone_number = request.values.get("phoneNumber", "")
 
+    # Log every request so we can see AT reaching Flask
+    print(f"USSD | session={session_id} | phone={phone_number} | text='{text}'")
+
     input_levels = text.split("*") if text else []
 
     if text == "":
-        response = (
+        response_text = (
             "CON Welcome to Agritex AI\n"
             "1. Start Yield Forecast\n"
             "2. Check System Health"
         )
     elif input_levels[0] == "1":
         if len(input_levels) == 1:
-            response = "CON Enter your District name:"
+            response_text = "CON Enter your District name:"
         elif len(input_levels) == 2:
-            response = (
+            response_text = (
                 f"CON District: {input_levels[1].title()}\n"
                 "Enter Ward number:"
             )
         elif len(input_levels) == 3:
-            response = (
+            response_text = (
                 f"END Agritex Advisory:\n"
                 f"Dist: {input_levels[1].title()} | "
                 f"Ward: {input_levels[2]}\n"
@@ -257,25 +257,22 @@ def ussd_callback():
                 f"Recommendation: Apply Top-dressing."
             )
         else:
-            response = "END Invalid entry. Please restart."
+            response_text = "END Invalid entry. Please restart."
     elif input_levels[0] == "2":
-        response = (
+        response_text = (
             "END System Status: All regional sensors online. "
             "Data synced with Agritex Cloud."
         )
     else:
-        response = "END Invalid entry. Please restart."
+        response_text = "END Invalid entry. Please restart."
 
-    # FIX #5: Build USSD response correctly —
-    # Content-Type MUST be text/plain, not application/json
-    res = make_response(response, 200)
-    res.headers["Content-Type"]               = "text/plain; charset=utf-8"
-    res.headers["ngrok-skip-browser-warning"] = "true"
-    res.headers["Cache-Control"]              = "no-cache, no-store"
-    res.headers["X-Content-Type-Options"]     = "nosniff"
+    # Build response with ONLY what AT needs — nothing extra
+    res = make_response(response_text, 200)
+    res.headers["Content-Type"] = "text/plain"
+    res.headers["Cache-Control"] = "no-cache"
     return res
 
 
 if __name__ == '__main__':
     debug_mode = os.environ.get("FLASK_DEBUG", "false").lower() == "true"
-    app.run(debug=debug_mode, port=5000, host='0.0.0.0')
+    app.run(debug=debug_mode, port=5001, host='0.0.0.0')
